@@ -1,0 +1,6 @@
+poll_period: 1m
+played_gap: 15m
+players:
+  - name: Koshee
+    region: euw
+    real_name: Валя

@@ -1,0 +1,57 @@
+poll_period: 1m
+played_gap: 60m
+channel_id: 932549761406476309
+players:
+  - name: koshee
+    tag: euw
+    region: euw
+    real_name: Валя
+  - name: omensielvo
+    tag: euw
+    region: euw
+    real_name: Диманчик
+  - name: willy2barrels
+    tag: euw
+    region: euw
+    real_name: Ром-ка
+  - name: SpielyWilly
+    tag: euw
+    region: euw
+    real_name: Ромпланк
+  - name: kokallika
+    tag: euw
+    region: euw
+    real_name: Йожик
+  - name: satum quata
+    tag: euw
+    region: euw
+    real_name: Квыб
+  - name: x9 critical dmg
+    tag: euw
+    region: euw
+    real_name: Квибстер
+  - name: lavrik
+    tag: euw
+    region: euw
+    real_name: Лаврентий
+  - name: serj
+    tag: wtf
+    region: euw
+    real_name: Сержинер
+  - name: commanderserj
+    tag: euw
+    region: euw
+    real_name: Серёженька
+  - name: commandershepard
+    tag: euw
+    region: euw
+    real_name: Саша-Космос
+  - name: baumanpower
+    tag: euw
+    region: euw
+    real_name: Алексей
+  - name: haribulus
+    tag: harib
+    region: euw
+    real_name: БулкинСерж
+

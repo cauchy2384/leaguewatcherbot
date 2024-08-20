@@ -1,0 +1,375 @@
+curl 'https://app.mobalytics.gg/api/league/gql/static/v1' \
+  -H 'authority: app.mobalytics.gg' \
+  -H 'accept: */*' \
+  -H 'accept-language: en_us' \
+  -H 'cache-control: no-cache' \
+  -H 'content-type: application/json' \
+  -H 'cookie: __qca=P0-544481363-1676695555954; appmobaabgroup=A; appmobaidebarisopen=1; gs_v_GSN-739536-G=; lolpreferredregion=EUW; _hjSessionUser_274929=eyJpZCI6ImVlNjg1ZjE1LTY4ZDQtNTc2Ni05M2UxLTZjYjFjZDA3ZDJjYiIsImNyZWF0ZWQiOjE2NzY2OTU2MTU4ODUsImV4aXN0aW5nIjp0cnVlfQ==; tftmobagameset-set8=set8; _hjDonePolls=882096%2C882096; Source=Other; SocialID=; Channel=; mp_disabled2481ee3dc80d5908eb3fc4c3711bd49b_mixpanel=%7B%22distinct_id%22%3A%20%2218662d7cce5caa-030a4948739e03-1f462c6d-1fa400-18662d7cce6f98%22%2C%22%24device_id%22%3A%20%2218662d7cce5caa-030a4948739e03-1f462c6d-1fa400-18662d7cce6f98%22%2C%22%24initial_referrer%22%3A%20%22%24direct%22%2C%22%24initial_referring_domain%22%3A%20%22%24direct%22%7D; _gcl_au=1.1.1718482442.1688214175; _gid=GA1.2.390130413.1688214175; _dc_gtm_UA-74699240-1=1; _hjSessionUser_536450=eyJpZCI6ImY2ZmNlMTU0LWM1ODEtNWE1Ny1hMjg1LTVhOTI5MzE0MDg1YSIsImNyZWF0ZWQiOjE2NzY2OTU1NTYwNDEsImV4aXN0aW5nIjp0cnVlfQ==; _hjIncludedInSessionSample_536450=0; _hjSession_536450=eyJpZCI6IjZmODE5NzgyLWVmZTItNDY3MS1hZDZjLTRiNWIxYzk5NGI4ZSIsImNyZWF0ZWQiOjE2ODgyMTQxNzUwMzQsImluU2FtcGxlIjpmYWxzZX0=; _hjAbsoluteSessionInProgress=1; FCCDCF=%5Bnull%2Cnull%2Cnull%2C%5B%22CPuOj0APuOj0AEsACBENDMCoAP_AAE_AACiQINJD7D7FbSFCwP57aLsAMAhXRkCAQqQAAASBAmABQAKQIAQCkkAYFESgBAACAAAAICJBIQIMCAgACUABQAAAAAEEAAAABAAIIAAAgAEAAAAIAAACAIAAEAAIAAAAEAAAmQhAAIIACAAAhAAAIAAAAAAAAAAAAgCAAAAAAAAAAAAAAAAAAQQaQD2F2K2kKEgfiWQWYAQBCujIEAhUAAAAECBIAAgAUgQAgFIIAwAIlAAAAAAAAAQEQCQgAQABAAAIACgAAAAAAIAAAAAAAQQAABAAIAAAAAAAAEAQAAIAAQAAAAAAABEhCAAQQAEAAAAAAAQAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAgAA.dgAACFgAAAA%22%2C%221~2072.70.89.93.108.122.149.196.2253.2299.259.2357.311.317.323.2373.338.358.2415.415.2506.2526.482.486.494.495.2568.2571.2575.540.574.2624.2677.2779.864.981.1048.1051.1095.1097.1171.1201.1205.1276.1301.1365.1415.1449.1570.1577.1651.1716.1735.1753.1765.1834.1870.1878.1889.1958%22%2C%221B3621C5-1084-4201-8818-715A42D71435%22%5D%2Cnull%2Cnull%2C%5B%5D%5D; _hjIncludedInSessionSample_274929=0; _hjSession_274929=eyJpZCI6IjI0YTU4MDhjLTJmYmQtNDc5ZC05YTQwLTljOGE4ZDVmY2VmMSIsImNyZWF0ZWQiOjE2ODgyMTQxODEzOTUsImluU2FtcGxlIjpmYWxzZX0=; _hjHasCachedUserAttributes=true; _hjShownFeedbackMessage=true; _hjSessionUser_3486546=eyJpZCI6IjVkMjBjMThjLTZkZWMtNTg2Ni1iOGQyLTcxNWQ1NjYxMWM3YiIsImNyZWF0ZWQiOjE2ODgyMTQxODQ5NDUsImV4aXN0aW5nIjpmYWxzZX0=; _hjFirstSeen=1; _hjIncludedInSessionSample_3486546=0; _hjSession_3486546=eyJpZCI6Ijg1OTE0ZDYwLTkzOWMtNDhlYi1hYjYwLWFmYjY5ZjhhMjEzNSIsImNyZWF0ZWQiOjE2ODgyMTQxODQ5NDksImluU2FtcGxlIjpmYWxzZX0=; mobalytics_session=MTY4ODIxNDE4N3xqUGxiRXJjTVZOYlFmOTBJQnNzTWdRTExtZ1FEUjFHSTZhMFZXOWVZLTNwSHM1XzdaZXJzWldBWF9MSnRvQUxOa09ZMTZfdUstYUZPVFhjUl9rcm5EUlpJSWNBRmRaeXZxXzZRUGQ5dXo2bHlQMDg2amd4SFJVdnFMU2paTDdhZWRrLUIyN2dBRENnRENFamEzZWJuS2pPZlIwNWtueExoaXJLalBsZERSUEExTDkzaDF2ZUJPc3c0ZUpUSE8wSnVybVBSanVLLXl3X213cFhEV1JuM3paa0MxaDJETUFBSV9kUT18BKNgKRoBrOvyFVz6eaIy6pA8uqjx232Vj46AyXounOY=; gs_u_GSN-739536-G=b3220d45f0bf6f300bf049cd33e96ac3:8595:9927:1688214213891; FCNEC=%5B%5B%22AKsRol-477R6Y2BqA_fNaN-nm7pCJ32N0DeqbtNg7yv-qTeOLxSI12N-ciDU3sKImui7PPNyX4Bzlc5HsEXJM6Vn-Rsf-wQ6Fwv43hrFiGSQatm-QRBgEPKJfa4lSlsE_DJSC3AsNom3S5tns8s0qIjZkwRMa00Zow%3D%3D%22%5D%2Cnull%2C%5B%5D%5D; _ga=GA1.2.625849534.1676695556; gs_p_GSN-739536-G=3; _ga_N5D01TG96J=GS1.1.1688214174.3.1.1688214220.14.0.0' \
+  -H 'origin: https://app.mobalytics.gg' \
+  -H 'pragma: no-cache' \
+  -H 'referer: https://app.mobalytics.gg/lol/profile/euw/omensielvo/overview' \
+  -H 'sec-ch-ua: "Chromium";v="110", "Not A(Brand";v="24", "Google Chrome";v="110"' \
+  -H 'sec-ch-ua-mobile: ?0' \
+  -H 'sec-ch-ua-platform: "Linux"' \
+  -H 'sec-fetch-dest: empty' \
+  -H 'sec-fetch-mode: cors' \
+  -H 'sec-fetch-site: same-origin' \
+  -H 'user-agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36' \
+  -H 'x-moba-client: mobalytics-web' \
+  -H 'x-moba-proxy-gql-ops-name: LolCommonDataQuery' \
+  --data-raw '{"operationName":"LolCommonDataQuery","variables":{},"query":"query LolCommonDataQuery {
+  gameState: queryGameStateDataV1Contents {
+    flatData {
+      lastChampionAddedDate
+      currentPatch
+      lastReleasedChampionSlug
+      __typename
+    }
+    __typename
+  }
+  appSettings: queryAppSettingsV1Contents {
+    flatData {
+      minDesktopVersion
+      activeTopBanner {
+        flatData {
+          ...LolTopBannerFragment
+          __typename
+        }
+        __typename
+      }
+      activePromoModal {
+        flatData {
+          ...PromoModalFragment
+          __typename
+        }
+        __typename
+      }
+      activeReleaseNotes {
+        flatData {
+          ...ReleaseNotesFragment
+          __typename
+        }
+        __typename
+      }
+      __typename
+    }
+    __typename
+  }
+  featureFlags: queryAppSettingsV1Contents {
+    flatData {
+      ffExperimentThreeDaysLcPromo
+      __typename
+    }
+    __typename
+  }
+  seasons: querySeasonsV1Contents {
+    flatData {
+      ...LolSeasonFragment
+      __typename
+    }
+    __typename
+  }
+  gameItemsChunk1: queryGameItemsV1Contents(top: 200, skip: 0) {
+    flatData {
+      ...GameItemCommonFragment
+      __typename
+    }
+    __typename
+  }
+  gameItemsChunk2: queryGameItemsV1Contents(top: 200, skip: 200) {
+    flatData {
+      ...GameItemCommonFragment
+      __typename
+    }
+    __typename
+  }
+  summonerSpells: querySummonersSpellsV1Contents(top: 200) {
+    flatData {
+      ...SummonerSpellCommonFragment
+      __typename
+    }
+    __typename
+  }
+  perks: queryRunesV1Contents(top: 200) {
+    flatData {
+      ...PerkCommonFragment
+      __typename
+    }
+    __typename
+  }
+  runesMap: queryRunesSlotsV1Contents {
+    flatData {
+      ...RunesSlotsFragment
+      __typename
+    }
+    __typename
+  }
+  champions: queryChampionsV1Contents(top: 200) {
+    flatData {
+      ...ChampionCommonFragment
+      __typename
+    }
+    __typename
+  }
+}
+
+fragment LolSeasonFragment on SeasonsV1DataFlatDto {
+  slug
+  name
+  __typename
+}
+
+fragment LolTopBannerFragment on TopBannersV1DataFlatDto {
+  slug
+  analyticsName
+  disallowedUsersAttributes
+  disallowedEnvVars
+  allowedUserLevels
+  platform
+  whiteListUserId {
+    userId
+    __typename
+  }
+  icon
+  text
+  linkText
+  linkUrl
+  openLinkInNewTab
+  background
+  withCloseButton
+  __typename
+}
+
+fragment PerkCommonFragment on RunesV1DataFlatDto {
+  riotId
+  name
+  slug
+  matchResultStatsLabels
+  __typename
+}
+
+fragment RunesSlotsFragment on RunesSlotsV1DataFlatDto {
+  key
+  riotId
+  name
+  rows {
+    perk {
+      flatData {
+        riotId
+        __typename
+      }
+      __typename
+    }
+    __typename
+  }
+  __typename
+}
+
+fragment PromoModalFragment on PromoOfferModalV1DataFlatDto {
+  slug
+  analyticsName
+  allowedUserLevels
+  platform
+  whiteListUserId {
+    userId
+    __typename
+  }
+  disallowedUsersAttributes
+  disallowedEnvVars
+  title
+  value
+  subTitle
+  label
+  labelBackground
+  modalBackground
+  buttonTitle
+  buttonLink
+  __typename
+}
+
+fragment ReleaseNotesFragment on ReleaseNotesV1DataFlatDto {
+  slug
+  title
+  subTitle
+  content
+  buttonTitle
+  buttonLink
+  allowedUserLevels
+  platform
+  whiteListUserId {
+    userId
+    __typename
+  }
+  __typename
+}
+
+fragment ChampionCommonFragment on ChampionsV1DataFlatDto {
+  slug
+  riotId
+  name
+  title
+  isInFreeRotation
+  abilities {
+    flatData {
+      ...ChampionAbilityCommonFragment
+      __typename
+    }
+    __typename
+  }
+  type {
+    flatData {
+      ...ChampionTypeFragment
+      __typename
+    }
+    __typename
+  }
+  difficulty {
+    flatData {
+      ...ChampionDifficultyFragment
+      __typename
+    }
+    __typename
+  }
+  customDifficulty {
+    flatData {
+      ...ChampionDifficultyFragment
+      __typename
+    }
+    __typename
+  }
+  __typename
+}
+
+fragment ChampionTypeFragment on ChampionTypeV1DataFlatDto {
+  slug
+  name
+  __typename
+}
+
+fragment ChampionDifficultyFragment on ChampionDifficultyV1DataFlatDto {
+  slug
+  name
+  color
+  level
+  __typename
+}
+
+fragment ChampionAbilityCommonFragment on ChampionsAbilitiesV1DataFlatDto {
+  slug
+  name
+  activationKey
+  __typename
+}
+
+fragment GameItemCommonFragment on GameItemsV1DataFlatDto {
+  riotId
+  name
+  type {
+    flatData {
+      slug
+      __typename
+    }
+    __typename
+  }
+  __typename
+}
+
+fragment SummonerSpellCommonFragment on SummonersSpellsV1DataFlatDto {
+  riotId
+  slug
+  name
+  __typename
+}
+"}' \
+  --compressed
+
+
+query LolCommonDataQuery {  
+  champions: queryChampionsV1Contents(top: 200) {
+    flatData {
+      riotId
+      name
+      __typename
+    }
+    __typename
+  }
+}
+
+fragment ChampionCommonFragment on ChampionsV1DataFlatDto {
+  slug
+  riotId
+  name
+  title
+  isInFreeRotation
+  abilities {
+    flatData {
+      ...ChampionAbilityCommonFragment
+      __typename
+    }
+    __typename
+  }
+  type {
+    flatData {
+      ...ChampionTypeFragment
+      __typename
+    }
+    __typename
+  }
+  difficulty {
+    flatData {
+      ...ChampionDifficultyFragment
+      __typename
+    }
+    __typename
+  }
+  customDifficulty {
+    flatData {
+      ...ChampionDifficultyFragment
+      __typename
+    }
+    __typename
+  }
+  __typename
+}
+
+fragment ChampionTypeFragment on ChampionTypeV1DataFlatDto {
+  slug
+  name
+  __typename
+}
+
+fragment ChampionDifficultyFragment on ChampionDifficultyV1DataFlatDto {
+  slug
+  name
+  color
+  level
+  __typename
+}
+
+fragment ChampionAbilityCommonFragment on ChampionsAbilitiesV1DataFlatDto {
+  slug
+  name
+  activationKey
+  __typename
+}
+
+fragment GameItemCommonFragment on GameItemsV1DataFlatDto {
+  riotId
+  name
+  type {
+    flatData {
+      slug
+      __typename
+    }
+    __typename
+  }
+  __typename
+}
+
+fragment SummonerSpellCommonFragment on SummonersSpellsV1DataFlatDto {
+  riotId
+  slug
+  name
+  __typename
+}
+"}
