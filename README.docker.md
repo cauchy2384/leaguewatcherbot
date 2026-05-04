@@ -86,6 +86,129 @@ docker-compose ps
 
 The bot is now running and monitoring the configured players!
 
+## Automated Builds & Versioning
+
+Docker images are automatically built and published to GitHub Container Registry (GHCR) via GitHub Actions with **automatic semantic versioning**.
+
+### How Versioning Works
+
+Every push to `main` automatically:
+1. Analyzes commit messages using [Conventional Commits](https://www.conventionalcommits.org/)
+2. Determines version bump based on commit type:
+   - `fix:` commits → **PATCH** version (1.0.0 → 1.0.1)
+   - `feat:` commits → **MINOR** version (1.0.0 → 1.1.0)
+   - `BREAKING CHANGE:` in commit footer → **MAJOR** version (1.0.0 → 2.0.0)
+3. Creates git tag automatically (e.g., `v1.2.3`)
+4. Builds and publishes Docker image with multiple semver tags
+5. Updates CHANGELOG.md and creates GitHub release
+
+**Conventional Commit Examples**:
+```bash
+# Patch version bump (bug fix)
+git commit -m "fix: resolve memory leak in match processing"
+# Result: v1.0.1
+
+# Minor version bump (new feature)
+git commit -m "feat: add Docker containerization support"
+# Result: v1.1.0
+
+# Major version bump (breaking change)
+git commit -m "feat!: redesign configuration API
+
+BREAKING CHANGE: config.yaml format has changed"
+# Result: v2.0.0
+
+# No release (documentation)
+git commit -m "docs: update README with examples"
+# Result: No version created, no Docker build
+```
+
+**Note**: Only commits to the `main` branch trigger versioning and builds. Feature branches and pull requests do NOT create Docker images.
+
+### Available Images
+
+Pre-built images are available at: `ghcr.io/cauchy2384/leaguewatcherbot`
+
+**Version Tags** (all point to the same image for a given release):
+```bash
+# Full version with v prefix
+ghcr.io/cauchy2384/leaguewatcherbot:v1.2.3
+
+# Full version without v prefix
+ghcr.io/cauchy2384/leaguewatcherbot:1.2.3
+
+# Major.minor (receives patch updates automatically)
+ghcr.io/cauchy2384/leaguewatcherbot:1.2
+
+# Major version only (receives minor and patch updates automatically)
+ghcr.io/cauchy2384/leaguewatcherbot:1
+```
+
+**IMPORTANT**: There is **NO "latest" tag**. Always use explicit version numbers for reproducible deployments.
+
+Browse all versions at: https://github.com/cauchy2384/leaguewatcherbot/pkgs/container/leaguewatcherbot
+
+### Using Pre-Built Images
+
+Instead of building locally, you can use pre-built images in your `docker-compose.yml`:
+
+```yaml
+services:
+  leaguewatcher:
+    # Use pre-built image instead of building locally
+    image: ghcr.io/cauchy2384/leaguewatcherbot:1.2
+    
+    # Remove the 'build:' section when using pre-built images
+    
+    environment:
+      - BOT_DISCORD_TOKEN=${BOT_DISCORD_TOKEN}
+      - BOT_OWNER_ID=${BOT_OWNER_ID}
+    volumes:
+      - leaguewatcher-data:/app
+      - ./config.yaml:/app/config.yaml:ro
+    restart: unless-stopped
+```
+
+### Version Pinning Strategy
+
+Choose your pinning strategy based on environment:
+
+| Environment | Recommended Tag | Behavior | Example |
+|-------------|----------------|----------|---------|
+| **Production** | Exact version (`1.2.3`) | No automatic updates, maximum stability | `ghcr.io/cauchy2384/leaguewatcherbot:1.2.3` |
+| **Staging** | Major.minor (`1.2`) | Automatic patch updates only | `ghcr.io/cauchy2384/leaguewatcherbot:1.2` |
+| **Development** | Major version (`1`) | Automatic minor and patch updates | `ghcr.io/cauchy2384/leaguewatcherbot:1` |
+
+**Never** rely on "latest" tag (it doesn't exist in this project by design).
+
+### Manual Image Pull
+
+To pull a specific version:
+
+```bash
+# Pull exact version
+docker pull ghcr.io/cauchy2384/leaguewatcherbot:1.2.3
+
+# Or use major.minor for automatic patch updates
+docker pull ghcr.io/cauchy2384/leaguewatcherbot:1.2
+
+# Verify the image
+docker images | grep leaguewatcherbot
+```
+
+### Build Information
+
+Each image includes metadata labels:
+```bash
+# Inspect image metadata
+docker inspect ghcr.io/cauchy2384/leaguewatcherbot:1.2.3
+
+# Shows:
+# - org.opencontainers.image.version: 1.2.3
+# - org.opencontainers.image.created: timestamp
+# - org.opencontainers.image.source: GitHub repository URL
+```
+
 ## Configuration
 
 ### Environment Variables
