@@ -11,9 +11,11 @@ import (
 )
 
 func TestConfig(t *testing.T) {
+	t.Parallel()
+
 	fd, err := os.Open(filepath.Join("testdata", "config.yaml"))
 	require.NoError(t, err)
-	defer fd.Close()
+	t.Cleanup(func() { fd.Close() })
 
 	var cfg Config
 	err = yaml.NewDecoder(fd).Decode(&cfg)
