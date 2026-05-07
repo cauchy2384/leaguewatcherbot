@@ -1,7 +1,6 @@
 package mobalytics
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"log/slog"
@@ -11,7 +10,7 @@ import (
 )
 
 func TestClientMatches(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	client := NewClient(slog.New(slog.NewTextHandler(io.Discard, nil)))
 
 	testCases := []struct {
@@ -38,7 +37,7 @@ func TestClientMatches(t *testing.T) {
 }
 
 func TestClientChampions(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	client := NewClient(slog.New(slog.NewTextHandler(io.Discard, nil)))
 
 	is := is.New(t)
@@ -54,7 +53,7 @@ func TestClientChampions(t *testing.T) {
 func TestRefreshProfiles(t *testing.T) {
 	t.Skip("\todo fix this test")
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	client := NewClient(slog.New(slog.NewTextHandler(io.Discard, nil)))
 
@@ -79,9 +78,7 @@ func TestRefreshProfiles(t *testing.T) {
 		{"hannibalcannibal", "euw", "euw"},
 	}
 
-	for i := range testCases {
-		tt := testCases[i]
-
+	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
