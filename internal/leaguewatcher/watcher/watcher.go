@@ -12,21 +12,27 @@ import (
 )
 
 type Watcher struct {
-	cfg    Config
-	logger *slog.Logger
+	period    time.Duration
+	playedGap time.Duration
+	configMgr ConfigProvider
+	logger    *slog.Logger
 
 	api   *mobalytics.Client
 	store *repository.Match
 }
 
+// ConfigProvider provides access to the current configuration
+type ConfigProvider interface {
+	GetPlayers() []leaguewatcher.Player
+	Get() leaguewatcher.Config
+}
+
 type Config struct {
 	Period    time.Duration
 	PlayedGap time.Duration
-
-	Players []leaguewatcher.Player
 }
 
-func New(cfg Config, logger *slog.Logger) *Watcher {
+func New(cfg Config, configMgr ConfigProvider, logger *slog.Logger) *Watcher {
 	logger.Info("creating watcher", slog.Any("config", cfg))
 
 	if cfg.Period == 0 {
@@ -37,16 +43,19 @@ func New(cfg Config, logger *slog.Logger) *Watcher {
 	}
 
 	return &Watcher{
-		cfg:    cfg,
-		logger: logger,
-		api:    mobalytics.NewClient(logger.With("component", "api")),
-		store:  repository.NewMatch(),
+		period:    cfg.Period,
+		playedGap: cfg.PlayedGap,
+		configMgr: configMgr,
+		logger:    logger,
+		api:       mobalytics.NewClient(logger.With("component", "api")),
+		store:     repository.NewMatch(),
 	}
 }
 
 func (w *Watcher) Run(ctx context.Context) (chan leaguewatcher.Match, chan struct{}) {
 	done := make(chan struct{})
-	ch := make(chan leaguewatcher.Match, len(w.cfg.Players))
+	players := w.configMgr.GetPlayers()
+	ch := make(chan leaguewatcher.Match, len(players))
 
 	if err := w.api.Sync(ctx); err != nil {
 		w.logger.Error("failed to sync", "error", err)
@@ -55,7 +64,7 @@ func (w *Watcher) Run(ctx context.Context) (chan leaguewatcher.Match, chan struc
 		return ch, done
 	}
 
-	ticker := time.NewTicker(w.cfg.Period)
+	ticker := time.NewTicker(w.period)
 
 	go func() {
 		defer close(done)
@@ -80,8 +89,11 @@ func (w *Watcher) Run(ctx context.Context) (chan leaguewatcher.Match, chan struc
 func (w *Watcher) checkPlayers(ctx context.Context, ch chan leaguewatcher.Match) {
 	wg, ctx := errgroup.WithContext(ctx)
 
-	for i := range w.cfg.Players {
-		player := w.cfg.Players[i]
+	// Get the latest player list from ConfigManager on each iteration
+	players := w.configMgr.GetPlayers()
+
+	for i := range players {
+		player := players[i]
 		wg.Go(func() error {
 			ctx, cancel := context.WithTimeout(ctx, 120*time.Second)
 			defer cancel()
@@ -109,7 +121,7 @@ func (w *Watcher) checkPlayers(ctx context.Context, ch chan leaguewatcher.Match)
 
 			match := matches[0]
 
-			if match.FinishedAt().Add(w.cfg.PlayedGap).Before(time.Now()) {
+			if match.FinishedAt().Add(w.playedGap).Before(time.Now()) {
 				w.logger.Debug("match is too old", "player", player.Name, slog.Time("finished_at", match.FinishedAt()))
 				return nil
 			}

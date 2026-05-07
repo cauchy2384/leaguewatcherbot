@@ -17,17 +17,14 @@ services:
     environment:
       - BOT_DISCORD_TOKEN=${BOT_DISCORD_TOKEN}
       - BOT_OWNER_ID=${BOT_OWNER_ID}
+      - DOPPLER_TOKEN=${DOPPLER_TOKEN}
       - LOG_LEVEL=${LOG_LEVEL:-info}
 
     # Volume strategy:
-    # - Named volume for entire /app directory (persistence)
-    # - Override config.yaml specifically via bind mount
+    # - Named volume for entire /app directory (persistence for pidors.json, log.json)
     volumes:
       # Persistent data volume
       - leaguewatcher-data:/app
-
-      # Config override (read-only for production)
-      - ./config.yaml:/app/config.yaml:ro
 
     # Resource limits (prevent runaway usage)
     deploy:

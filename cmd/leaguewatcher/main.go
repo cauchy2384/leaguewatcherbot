@@ -10,8 +10,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"syscall"
-
-	"gopkg.in/yaml.v3"
+	"time"
 )
 
 func main() {
@@ -31,31 +30,38 @@ func main() {
 	exPath := filepath.Dir(ex)
 	logger.Info("Executable path", "path", exPath)
 
-	fd, err := os.Open(filepath.Join(exPath, "config.yaml"))
-	if err != nil {
-		logger.Error("Can't open config file", "error", err)
+	// Initialize ConfigManager with Doppler token
+	dopplerToken := os.Getenv("DOPPLER_TOKEN")
+	if dopplerToken == "" {
+		logger.Error("DOPPLER_TOKEN environment variable is required")
 		return
 	}
-	defer fd.Close()
 
-	var cfg leaguewatcher.Config
-	err = yaml.NewDecoder(fd).Decode(&cfg)
+	configMgr, err := leaguewatcher.NewConfigManager(dopplerToken, logger.With("component", "config"))
 	if err != nil {
-		logger.Error("Can't decode config file", "error", err)
+		logger.Error("Failed to create config manager", "error", err)
 		return
 	}
-	if err := cfg.IsValid(); err != nil {
-		logger.Error("Config is invalid", "error", err)
+
+	// Perform initial config reload from Doppler
+	if err := configMgr.Reload(ctx); err != nil {
+		logger.Error("Failed to load initial configuration from Doppler", "error", err)
 		return
 	}
-	logger.Info("Config loaded", slog.Any("config", cfg))
+
+	// Start auto-reload every 5 minutes
+	configMgr.StartAutoReload(ctx, 5*time.Minute)
+
+	// Get initial config
+	cfg := configMgr.Get()
+	logger.Info("Config loaded from Doppler", slog.Any("config", cfg))
 
 	watcher := watcher.New(
 		watcher.Config{
 			Period:    cfg.PollPeriod,
 			PlayedGap: cfg.PlayedGap,
-			Players:   cfg.Players,
 		},
+		configMgr,
 		logger.With("component", "watcher"),
 	)
 

@@ -44,9 +44,6 @@ WORKDIR /app
 # Copy binary from builder
 COPY --from=builder /build/leaguewatcherbot /app/leaguewatcherbot
 
-# Copy default config (can be overridden by volume mount)
-COPY config.yaml /app/config.yaml
-
 # Set ownership to non-root user
 RUN chown -R leaguewatcher:leaguewatcher /app
 
