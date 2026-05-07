@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"leaguewatcher/internal/leaguewatcher"
 	"log/slog"
-	"math/rand"
+	"math/rand/v2"
 	"strings"
 	"sync"
 	"time"
@@ -291,6 +291,6 @@ func smiley(win bool) string {
 }
 
 func pickRand(ss []string) string {
-	randomIndex := rand.Intn(len(ss))
+	randomIndex := rand.IntN(len(ss))
 	return ss[randomIndex]
 }

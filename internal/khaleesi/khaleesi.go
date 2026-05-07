@@ -2,7 +2,7 @@ package khaleesi
 
 import (
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"regexp"
 	"strings"
 )
@@ -31,7 +31,7 @@ func New() (*Khaleesi, error) {
 func (k *Khaleesi) Modify(input string) (string, bool) {
 	output := k.re.ReplaceAllStringFunc(input, func(s string) string {
 		ss := k.subs[s]
-		idx := rand.Intn(len(ss))
+		idx := rand.IntN(len(ss))
 		return ss[idx]
 	})
 

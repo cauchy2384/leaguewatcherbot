@@ -1,11 +1,12 @@
 package bot
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"leaguewatcher/internal/leaguewatcher/bot/repository"
-	"math/rand"
-	"sort"
+	"math/rand/v2"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -129,7 +130,7 @@ func (b *Bot) pidorOfTheDay(_ context.Context, s *discordgo.Session, m *discordg
 		pidors = append(pidors, m)
 	}
 
-	randomIndex := rand.Intn(len(pidors))
+	randomIndex := rand.IntN(len(pidors))
 	pidor := pidors[randomIndex]
 	b.logger.Debug("pidor of the day", "pidor", pidor)
 
@@ -161,12 +162,11 @@ func (b *Bot) pidorStats(_ context.Context, s *discordgo.Session, m *discordgo.M
 			Count: s.Count,
 		})
 	}
-	sort.Slice(pidors, func(i, j int) bool {
-		if pidors[i].Count != pidors[j].Count {
-			return pidors[i].Count > pidors[j].Count
+	slices.SortFunc(pidors, func(a, b Pidor) int {
+		if a.Count != b.Count {
+			return cmp.Compare(b.Count, a.Count) // Reverse for descending
 		}
-
-		return pidors[i].Name < pidors[j].Name
+		return cmp.Compare(a.Name, b.Name)
 	})
 
 	total := 0
@@ -220,12 +220,11 @@ func (b *Bot) pidorPersonalStats(ctx context.Context, s *discordgo.Session, m *d
 			Count: s.Count,
 		})
 	}
-	sort.Slice(pidors, func(i, j int) bool {
-		if pidors[i].Count != pidors[j].Count {
-			return pidors[i].Count > pidors[j].Count
+	slices.SortFunc(pidors, func(a, b Pidor) int {
+		if a.Count != b.Count {
+			return cmp.Compare(b.Count, a.Count) // Reverse for descending
 		}
-
-		return pidors[i].Name < pidors[j].Name
+		return cmp.Compare(a.Name, b.Name)
 	})
 
 	rating := 0
