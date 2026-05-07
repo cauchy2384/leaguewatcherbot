@@ -103,7 +103,7 @@ Ready to write code? Awesome! Please follow the guidelines in this document, esp
 
 ### Prerequisites
 
-- **Go 1.22.0 or higher** ([Download Go](https://go.dev/dl/))
+- **Go 1.26 or higher** ([Download Go](https://go.dev/dl/))
 - **Git** for version control
 - **Discord Bot Token** (create one at [Discord Developer Portal](https://discord.com/developers/applications))
 - **Discord Account** for testing

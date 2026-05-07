@@ -1,6 +1,6 @@
 module leaguewatcher
 
-go 1.22.0
+go 1.26
 
 require (
 	github.com/bwmarrin/discordgo v0.28.1
