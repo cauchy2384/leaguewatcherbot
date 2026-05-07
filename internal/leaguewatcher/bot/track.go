@@ -134,15 +134,12 @@ func (t *TracksMap) Fanout(m leaguewatcher.Match) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	ticker := time.NewTimer(10 * time.Second)
-	defer ticker.Stop()
-
 	for _, track := range t.tracks {
-		ticker.Reset(10 * time.Second)
+		timeout := time.After(10 * time.Second)
 		select {
 		case track.msgs <- m:
 			t.logger.Debug("fanout", "channel", track.channelID)
-		case <-ticker.C:
+		case <-timeout:
 			t.logger.Warn("fanout channel is stuck", "channel", track.channelID)
 		}
 	}
