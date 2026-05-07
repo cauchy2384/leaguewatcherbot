@@ -6,20 +6,16 @@ import (
 	"leaguewatcher/internal/leaguewatcher/bot"
 	"leaguewatcher/internal/leaguewatcher/watcher"
 	"log/slog"
-	"math/rand"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"syscall"
-	"time"
 
 	"gopkg.in/yaml.v3"
 )
 
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
-
-	rand.Seed(time.Now().UnixNano())
 
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
 		Level: slog.LevelDebug,
