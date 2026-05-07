@@ -249,6 +249,28 @@ players:
 2. Restart the container: `docker-compose restart`
 3. The new config is loaded automatically (bind-mounted)
 
+### Khaleesi Feature (Optional)
+
+The bot includes a text replacement feature that mutates messages. This feature is **disabled by default**.
+
+To enable it, add to `config.yaml`:
+
+```yaml
+khaleesi_threshold: 200   # Trigger after 200 messages
+```
+
+**Values:**
+- Omit the field - Feature disabled (default)
+- `0` - Feature disabled
+- `> 0` - Trigger after exactly this many messages
+
+**Recommended:** `200` (occasional mutations)
+
+**Examples:**
+- `khaleesi_threshold: 50` - Trigger more frequently
+- `khaleesi_threshold: 500` - Trigger rarely
+- Omit field or set to `0` - Disable completely
+
 ## Common Operations
 
 ### Start the Bot

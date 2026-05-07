@@ -71,11 +71,12 @@ func main() {
 
 	bot, err := bot.New(
 		bot.Config{
-			Token:      os.Getenv("BOT_DISCORD_TOKEN"),
-			OwnerID:    os.Getenv("BOT_OWNER_ID"),
-			PidorsFile: filepath.Join(exPath, "pidors.json"),
-			LogFile:    filepath.Join(exPath, "log.json"),
-			ChannelID:  cfg.ChannelID,
+			Token:             os.Getenv("BOT_DISCORD_TOKEN"),
+			OwnerID:           os.Getenv("BOT_OWNER_ID"),
+			PidorsFile:        filepath.Join(exPath, "pidors.json"),
+			LogFile:           filepath.Join(exPath, "log.json"),
+			ChannelID:         cfg.ChannelID,
+			KhaleesiThreshold: cfg.KhaleesiThreshold,
 		},
 		ch,
 		logger.Named("bot"),

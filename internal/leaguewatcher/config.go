@@ -9,8 +9,9 @@ type Config struct {
 	PollPeriod time.Duration `yaml:"poll_period"`
 	PlayedGap  time.Duration `yaml:"played_gap"`
 
-	Players   []Player `yaml:"players"`
-	ChannelID string   `yaml:"channel_id"`
+	Players           []Player `yaml:"players"`
+	ChannelID         string   `yaml:"channel_id"`
+	KhaleesiThreshold *int     `yaml:"khaleesi_threshold,omitempty"`
 }
 
 func (cfg Config) IsValid() error {
@@ -40,5 +41,10 @@ func (cfg Config) IsValid() error {
 	if cfg.ChannelID == "" {
 		return fmt.Errorf("channel ID must not be empty")
 	}
+
+	if cfg.KhaleesiThreshold != nil && *cfg.KhaleesiThreshold < 0 {
+		return fmt.Errorf("khaleesi_threshold must be >= 0")
+	}
+
 	return nil
 }

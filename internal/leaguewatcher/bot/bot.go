@@ -30,11 +30,12 @@ type Bot struct {
 }
 
 type Config struct {
-	Token      string
-	OwnerID    string
-	PidorsFile string
-	LogFile    string
-	ChannelID  string
+	Token             string
+	OwnerID           string
+	PidorsFile        string
+	LogFile           string
+	ChannelID         string
+	KhaleesiThreshold *int
 }
 
 func New(cfg Config, matchesCh chan leaguewatcher.Match, logger *zap.Logger) (*Bot, error) {
@@ -56,11 +57,16 @@ func New(cfg Config, matchesCh chan leaguewatcher.Match, logger *zap.Logger) (*B
 		log: repository.NewLog(cfg.LogFile),
 	}
 
-	bot.kh, err = khaleesi.New()
-	if err != nil {
-		return nil, fmt.Errorf("khaleesi: %w", err)
+	if cfg.KhaleesiThreshold != nil && *cfg.KhaleesiThreshold > 0 {
+		bot.kh, err = khaleesi.New()
+		if err != nil {
+			return nil, fmt.Errorf("khaleesi: %w", err)
+		}
+		bot.resetKhaleesi()
+		logger.Info("khaleesi enabled", zap.Int("threshold", *cfg.KhaleesiThreshold))
+	} else {
+		logger.Info("khaleesi disabled")
 	}
-	bot.resetKhaleesi()
 
 	return &bot, nil
 }

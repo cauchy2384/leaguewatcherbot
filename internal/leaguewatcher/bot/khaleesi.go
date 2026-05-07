@@ -2,13 +2,15 @@ package bot
 
 import (
 	"context"
-	"math/rand"
 	"unicode/utf8"
 
 	"github.com/bwmarrin/discordgo"
 )
 
 func (b *Bot) khaleesi(ctx context.Context, s *discordgo.Session, m *discordgo.MessageCreate) {
+	if b.kh == nil {
+		return
+	}
 
 	input := m.Message.Content
 	if utf8.RuneCountInString(input) < 10 {
@@ -35,5 +37,5 @@ func (b *Bot) khaleesi(ctx context.Context, s *discordgo.Session, m *discordgo.M
 
 func (b *Bot) resetKhaleesi() {
 	b.cnt.Store(0)
-	b.thresh.Store(rand.Int31()%20 + 10)
+	b.thresh.Store(int32(*b.cfg.KhaleesiThreshold))
 }
