@@ -6,6 +6,7 @@ import (
 )
 
 func TestEmoji(t *testing.T) {
+	t.Parallel()
 	for _, s := range emojiWin() {
 		fmt.Println(s)
 	}

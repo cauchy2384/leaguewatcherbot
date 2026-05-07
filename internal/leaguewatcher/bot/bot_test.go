@@ -15,6 +15,7 @@ import (
 )
 
 func TestBot(t *testing.T) {
+	t.Parallel()
 	ctx := t.Context()
 	is := is.New(t)
 

@@ -10,6 +10,7 @@ import (
 )
 
 func TestClientMatches(t *testing.T) {
+	t.Parallel()
 	ctx := t.Context()
 	client := NewClient(slog.New(slog.NewTextHandler(io.Discard, nil)))
 

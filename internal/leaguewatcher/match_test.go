@@ -7,6 +7,7 @@ import (
 )
 
 func TestMatchURL(t *testing.T) {
+	t.Parallel()
 	is := is.New(t)
 
 	m := Match{
