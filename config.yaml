@@ -1,7 +1,7 @@
 poll_period: 1m
 played_gap: 60m
 channel_id: 932549761406476309
-khaleesi_threshold: 200
+khaleesi_threshold: 100
 players:
   - name: koshee
     tag: euw

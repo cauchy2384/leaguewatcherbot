@@ -2,6 +2,7 @@ package bot
 
 import (
 	"context"
+	"math/rand"
 	"unicode/utf8"
 
 	"github.com/bwmarrin/discordgo"
@@ -37,5 +38,11 @@ func (b *Bot) khaleesi(ctx context.Context, s *discordgo.Session, m *discordgo.M
 
 func (b *Bot) resetKhaleesi() {
 	b.cnt.Store(0)
-	b.thresh.Store(int32(*b.cfg.KhaleesiThreshold))
+	base := *b.cfg.KhaleesiThreshold
+	jitter := rand.Int31n(21) - 10 // ±10 messages jitter
+	threshold := int32(base) + jitter
+	if threshold < 1 {
+		threshold = 1
+	}
+	b.thresh.Store(threshold)
 }

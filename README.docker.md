@@ -256,20 +256,22 @@ The bot includes a text replacement feature that mutates messages. This feature 
 To enable it, add to `config.yaml`:
 
 ```yaml
-khaleesi_threshold: 200   # Trigger after 200 messages
+khaleesi_threshold: 100   # Trigger after ~100 messages (±10 jitter)
 ```
 
 **Values:**
 - Omit the field - Feature disabled (default)
 - `0` - Feature disabled
-- `> 0` - Trigger after exactly this many messages
+- `> 0` - Trigger after approximately this many messages (±10 message jitter)
 
-**Recommended:** `200` (occasional mutations)
+**Recommended:** `100` (balanced frequency)
 
 **Examples:**
-- `khaleesi_threshold: 50` - Trigger more frequently
-- `khaleesi_threshold: 500` - Trigger rarely
+- `khaleesi_threshold: 50` - Trigger more frequently (~40-60 messages)
+- `khaleesi_threshold: 200` - Trigger less frequently (~190-210 messages)
 - Omit field or set to `0` - Disable completely
+
+**Note:** The actual trigger point includes ±10 message random jitter for variety.
 
 ## Common Operations
 
