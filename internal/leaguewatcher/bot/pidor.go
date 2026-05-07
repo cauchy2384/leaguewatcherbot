@@ -170,8 +170,8 @@ func (b *Bot) pidorStats(_ context.Context, s *discordgo.Session, m *discordgo.M
 	})
 
 	total := 0
-	for i := range pidors {
-		total += pidors[i].Count
+	for _, pidor := range pidors {
+		total += pidor.Count
 	}
 
 	if len(pidors) > pidorStatsLen {
