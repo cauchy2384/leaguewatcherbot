@@ -6,16 +6,16 @@ import (
 	"leaguewatcher/internal/khaleesi"
 	"leaguewatcher/internal/leaguewatcher"
 	"leaguewatcher/internal/leaguewatcher/bot/repository"
+	"log/slog"
 	"strings"
 	"sync/atomic"
 
 	"github.com/bwmarrin/discordgo"
-	"go.uber.org/zap"
 )
 
 type Bot struct {
 	cfg    Config
-	logger *zap.Logger
+	logger *slog.Logger
 
 	matchesCh chan leaguewatcher.Match
 	tracks    *TracksMap
@@ -38,8 +38,8 @@ type Config struct {
 	KhaleesiThreshold *int
 }
 
-func New(cfg Config, matchesCh chan leaguewatcher.Match, logger *zap.Logger) (*Bot, error) {
-	logger.Info("bot created", zap.Any("config", cfg))
+func New(cfg Config, matchesCh chan leaguewatcher.Match, logger *slog.Logger) (*Bot, error) {
+	logger.Info("bot created", slog.Any("config", cfg))
 
 	pidors, err := NewPidors(cfg.PidorsFile)
 	if err != nil {
@@ -51,7 +51,7 @@ func New(cfg Config, matchesCh chan leaguewatcher.Match, logger *zap.Logger) (*B
 		logger: logger,
 
 		matchesCh: matchesCh,
-		tracks:    NewTracksMap(logger.Named("tracks")),
+		tracks:    NewTracksMap(logger.With("component", "tracks")),
 		pidors:    pidors,
 
 		log: repository.NewLog(cfg.LogFile),
@@ -63,7 +63,7 @@ func New(cfg Config, matchesCh chan leaguewatcher.Match, logger *zap.Logger) (*B
 			return nil, fmt.Errorf("khaleesi: %w", err)
 		}
 		bot.resetKhaleesi()
-		logger.Info("khaleesi enabled", zap.Int("threshold", *cfg.KhaleesiThreshold))
+		logger.Info("khaleesi enabled", "threshold", *cfg.KhaleesiThreshold)
 	} else {
 		logger.Info("khaleesi disabled")
 	}
@@ -104,7 +104,7 @@ func (b *Bot) Run(ctx context.Context) (chan struct{}, error) {
 			case <-ctx.Done():
 				return
 			case m := <-b.matchesCh:
-				b.logger.Debug("match", zap.Any("match", m))
+				b.logger.Debug("match", slog.Any("match", m))
 				b.tracks.Fanout(m)
 			}
 		}
@@ -147,6 +147,6 @@ func (b *Bot) cmd(ctx context.Context, s *discordgo.Session, m *discordgo.Messag
 	event := leaguewatcher.NewEvent(cmd, fmt.Sprintf("%s %s", m.Author.Username, m.Author.ID))
 	err := b.log.AddEvent(event)
 	if err != nil {
-		b.logger.Warn("failed to log event", zap.Any("event", event), zap.Error(err))
+		b.logger.Warn("failed to log event", slog.Any("event", event), "error", err)
 	}
 }

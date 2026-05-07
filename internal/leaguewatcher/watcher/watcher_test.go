@@ -3,13 +3,14 @@ package watcher
 import (
 	"context"
 	"fmt"
+	"log/slog"
+	"os"
 	"testing"
 	"time"
 
 	"leaguewatcher/internal/leaguewatcher"
 
 	"github.com/matryer/is"
-	"go.uber.org/zap"
 )
 
 func TestWatcher(t *testing.T) {
@@ -28,7 +29,9 @@ func TestWatcher(t *testing.T) {
 		},
 	}
 
-	logger, _ := zap.NewDevelopment()
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+		Level: slog.LevelDebug,
+	}))
 	watcher := New(cfg, logger)
 
 	ctx, cancel := context.WithTimeout(ctx, 3*cfg.Period)

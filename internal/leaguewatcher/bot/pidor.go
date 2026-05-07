@@ -12,7 +12,6 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/kyokomi/emoji/v2"
-	"go.uber.org/zap"
 )
 
 const (
@@ -112,13 +111,13 @@ func (b *Bot) pidorOfTheDay(_ context.Context, s *discordgo.Session, m *discordg
 
 	c, err := s.State.Channel(cID)
 	if err != nil {
-		b.logger.Warn("failed to get channel", zap.String("channel", cID), zap.Error(err))
+		b.logger.Warn("failed to get channel", "channel", cID, "error", err)
 		return
 	}
 	gID := c.GuildID
 	members, err := s.GuildMembers(gID, "0", 1000)
 	if err != nil {
-		b.logger.Warn("failed to get guild members", zap.String("guild", gID), zap.Error(err))
+		b.logger.Warn("failed to get guild members", "guild", gID, "error", err)
 		return
 	}
 
@@ -132,7 +131,7 @@ func (b *Bot) pidorOfTheDay(_ context.Context, s *discordgo.Session, m *discordg
 
 	randomIndex := rand.Intn(len(pidors))
 	pidor := pidors[randomIndex]
-	b.logger.Debug("pidor of the day", zap.Any("pidor", pidor))
+	b.logger.Debug("pidor of the day", "pidor", pidor)
 
 	_, err = s.ChannelMessageSend(c.ID,
 		fmt.Sprintf(

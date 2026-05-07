@@ -55,7 +55,7 @@ What actually happened
 
 **Logs:**
 ```
-Paste relevant logs from zap output here
+Paste relevant logs from slog output here
 (Make sure to sanitize any sensitive information like bot tokens)
 ```
 
@@ -336,32 +336,36 @@ if err != nil {
 
 ```go
 if err != nil {
-    logger.Error("Can't connect to Discord", zap.Error(err))
+    logger.Error("Can't connect to Discord", "error", err)
     return
 }
 ```
 
 ### Logging
 
-**Use structured logging with `go.uber.org/zap`:**
+**Use structured logging with Go's standard library `log/slog`:**
 
 ```go
 logger.Info("Processing match", 
-    zap.String("player", match.Player.RealName),
-    zap.String("champion", match.Champion),
-    zap.Bool("win", match.Win),
+    "player", match.Player.RealName,
+    "champion", match.Champion,
+    "win", match.Win,
 )
 
 logger.Error("Failed to post message", 
-    zap.Error(err),
-    zap.String("channel", channelID),
+    "error", err,
+    "channel", channelID,
 )
+
+// For complex objects, use slog.Any()
+logger.Debug("Match details", slog.Any("match", match))
 ```
 
 **Log levels:**
 - `Info` - Normal operation events
 - `Error` - Error conditions that need attention
 - `Debug` - Detailed diagnostic information (use sparingly)
+- `Warn` - Warning conditions that should be reviewed
 
 ### Concurrency
 

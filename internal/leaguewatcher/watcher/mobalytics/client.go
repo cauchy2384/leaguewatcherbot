@@ -6,22 +6,22 @@ import (
 	"encoding/json"
 	"fmt"
 	"leaguewatcher/internal/leaguewatcher"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/hasura/go-graphql-client"
-	"go.uber.org/zap"
 )
 
 type Client struct {
 	client *http.Client
 	gql    *graphql.Client
 	champs map[int]leaguewatcher.Champion
-	logger *zap.Logger
+	logger *slog.Logger
 }
 
-func NewClient(logger *zap.Logger) *Client {
+func NewClient(logger *slog.Logger) *Client {
 	client := http.Client{
 		Timeout: 30 * time.Second,
 	}
@@ -341,7 +341,7 @@ func (c *Client) RefreshProfile(ctx context.Context, region, summoner, tag strin
 		// WithLog(log.Println),
 	defer func() {
 		if err := ws.Close(); err != nil {
-			c.logger.Error("close ws", zap.Error(err))
+			c.logger.Error("close ws", "error", err)
 		} else {
 			c.logger.Debug("ws closed")
 		}

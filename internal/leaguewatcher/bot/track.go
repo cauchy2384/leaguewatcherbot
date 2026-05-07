@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"leaguewatcher/internal/leaguewatcher"
+	"log/slog"
 	"math/rand"
 	"strings"
 	"sync"
@@ -11,7 +12,6 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/kyokomi/emoji/v2"
-	"go.uber.org/zap"
 )
 
 type Track struct {
@@ -29,12 +29,12 @@ func NewTrack(channelID string) Track {
 }
 
 type TracksMap struct {
-	logger *zap.Logger
+	logger *slog.Logger
 	mu     sync.Mutex
 	tracks map[string]Track
 }
 
-func NewTracksMap(logger *zap.Logger) *TracksMap {
+func NewTracksMap(logger *slog.Logger) *TracksMap {
 	return &TracksMap{
 		logger: logger,
 		mu:     sync.Mutex{},
@@ -76,7 +76,7 @@ func (t *TracksMap) Track(ctx context.Context, s *discordgo.Session, cID string)
 			message := fmt.Sprintf("We will never be slaves! %s", emoji.Sprint(":mobile_phone_off:"))
 			_, err := s.ChannelMessageSend(cID, message)
 			if err != nil {
-				t.logger.Warn("failed to send message", zap.String("channel", cID), zap.Error(err))
+				t.logger.Warn("failed to send message", "channel", cID, "error", err)
 				return
 			}
 		}()
@@ -91,12 +91,12 @@ func (t *TracksMap) Track(ctx context.Context, s *discordgo.Session, cID string)
 				if !ok {
 					return
 				}
-				t.logger.Debug("match", zap.Any("match", m))
+				t.logger.Debug("match", slog.Any("match", m))
 
 				msg := matchToMessage(m)
 				_, err = s.ChannelMessageSendComplex(cID, &msg)
 				if err != nil {
-					t.logger.Warn("failed to send message", zap.String("channel", cID), zap.Error(err))
+					t.logger.Warn("failed to send message", "channel", cID, "error", err)
 				}
 			}
 		}
@@ -141,9 +141,9 @@ func (t *TracksMap) Fanout(m leaguewatcher.Match) {
 		ticker.Reset(10 * time.Second)
 		select {
 		case track.msgs <- m:
-			t.logger.Debug("fanout", zap.String("channel", track.channelID))
+			t.logger.Debug("fanout", "channel", track.channelID)
 		case <-ticker.C:
-			t.logger.Warn("fanout channel is stuck", zap.String("channel", track.channelID))
+			t.logger.Warn("fanout channel is stuck", "channel", track.channelID)
 		}
 	}
 }
@@ -154,26 +154,26 @@ func (b *Bot) track(ctx context.Context, s *discordgo.Session, m *discordgo.Mess
 
 	if !strings.EqualFold(m.Author.Username, b.cfg.OwnerID) {
 		_, _ = s.ChannelMessageSend(cID, emoji.Sprint(":poop:"))
-		b.logger.Info("not owner", zap.String("channel", cID),
-			zap.String("id", m.Author.ID), zap.String("global", m.Author.GlobalName), zap.String("username", m.Author.Username),
-			zap.String("expected", b.cfg.OwnerID),
+		b.logger.Info("not owner", "channel", cID,
+			"id", m.Author.ID, "global", m.Author.GlobalName, "username", m.Author.Username,
+			"expected", b.cfg.OwnerID,
 		)
 		return
 	}
 
 	if b.tracks.IsTracking(cID) {
-		b.logger.Info("channel is already tracked", zap.String("channel", cID))
+		b.logger.Info("channel is already tracked", "channel", cID)
 		return
 	}
 
 	b.tracks.Track(ctx, s, cID)
-	b.logger.Info("channel tracked", zap.String("channel", cID))
-	b.logger.Debug("tracked channels", zap.Strings("channels", b.tracks.Channels()))
+	b.logger.Info("channel tracked", "channel", cID)
+	b.logger.Debug("tracked channels", slog.Any("channels", b.tracks.Channels()))
 
 	message := fmt.Sprintf("Yes, master? %s", emoji.Sprint(":on:"))
 	_, err := s.ChannelMessageSend(cID, message)
 	if err != nil {
-		b.logger.Warn("failed to send message", zap.String("channel", m.ChannelID), zap.Error(err))
+		b.logger.Warn("failed to send message", "channel", m.ChannelID, "error", err)
 		return
 	}
 }
@@ -184,18 +184,18 @@ func (b *Bot) untrack(_ context.Context, s *discordgo.Session, m *discordgo.Mess
 
 	if !strings.EqualFold(m.Author.Username, b.cfg.OwnerID) {
 		_, _ = s.ChannelMessageSend(cID, emoji.Sprint(":poop:"))
-		b.logger.Info("not owner", zap.String("channel", m.ChannelID), zap.String("author", m.Author.String()))
+		b.logger.Info("not owner", "channel", m.ChannelID, "author", m.Author.String())
 		return
 	}
 
 	if !b.tracks.IsTracking(cID) {
-		b.logger.Info("channel is not tracked", zap.String("channel", m.ChannelID))
+		b.logger.Info("channel is not tracked", "channel", m.ChannelID)
 		return
 	}
 
 	b.tracks.Untrack(cID)
-	b.logger.Info("channel is untracked", zap.String("channel", m.ChannelID))
-	b.logger.Debug("tracked channels", zap.Strings("channels", b.tracks.Channels()))
+	b.logger.Info("channel is untracked", "channel", m.ChannelID)
+	b.logger.Debug("tracked channels", slog.Any("channels", b.tracks.Channels()))
 }
 
 func matchToMessage(m leaguewatcher.Match) discordgo.MessageSend {

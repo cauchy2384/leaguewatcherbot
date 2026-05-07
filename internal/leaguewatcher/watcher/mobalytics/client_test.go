@@ -3,15 +3,16 @@ package mobalytics
 import (
 	"context"
 	"fmt"
+	"io"
+	"log/slog"
 	"testing"
 
 	"github.com/matryer/is"
-	"go.uber.org/zap"
 )
 
 func TestClientMatches(t *testing.T) {
 	ctx := context.Background()
-	client := NewClient(zap.NewNop())
+	client := NewClient(slog.New(slog.NewTextHandler(io.Discard, nil)))
 
 	testCases := []struct {
 		name   string
@@ -38,7 +39,7 @@ func TestClientMatches(t *testing.T) {
 
 func TestClientChampions(t *testing.T) {
 	ctx := context.Background()
-	client := NewClient(zap.NewNop())
+	client := NewClient(slog.New(slog.NewTextHandler(io.Discard, nil)))
 
 	is := is.New(t)
 
@@ -55,7 +56,7 @@ func TestRefreshProfiles(t *testing.T) {
 
 	ctx := context.Background()
 
-	client := NewClient(zap.NewNop())
+	client := NewClient(slog.New(slog.NewTextHandler(io.Discard, nil)))
 
 	testCases := []struct {
 		name   string

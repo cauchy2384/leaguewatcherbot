@@ -2,10 +2,10 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"leaguewatcher/internal/leaguewatcher"
 	"leaguewatcher/internal/leaguewatcher/bot"
 	"leaguewatcher/internal/leaguewatcher/watcher"
+	"log/slog"
 	"math/rand"
 	"os"
 	"os/signal"
@@ -13,7 +13,6 @@ import (
 	"syscall"
 	"time"
 
-	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
 )
 
@@ -22,26 +21,23 @@ func main() {
 
 	rand.Seed(time.Now().UnixNano())
 
-	logger, err := zap.NewDevelopment()
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+		Level: slog.LevelDebug,
+	}))
 	logger.Info("Starting leaguewatcher")
-	defer logger.Sync()
 	defer logger.Info("Stopping leaguewatcher")
 
 	ex, err := os.Executable()
 	if err != nil {
-		logger.Error("Can't get executable path", zap.Error(err))
+		logger.Error("Can't get executable path", "error", err)
 		return
 	}
 	exPath := filepath.Dir(ex)
-	logger.Info("Executable path", zap.String("path", exPath))
+	logger.Info("Executable path", "path", exPath)
 
 	fd, err := os.Open(filepath.Join(exPath, "config.yaml"))
 	if err != nil {
-		logger.Error("Can't open config file", zap.Error(err))
+		logger.Error("Can't open config file", "error", err)
 		return
 	}
 	defer fd.Close()
@@ -49,14 +45,14 @@ func main() {
 	var cfg leaguewatcher.Config
 	err = yaml.NewDecoder(fd).Decode(&cfg)
 	if err != nil {
-		logger.Error("Can't decode config file", zap.Error(err))
+		logger.Error("Can't decode config file", "error", err)
 		return
 	}
 	if err := cfg.IsValid(); err != nil {
-		logger.Error("Config is invalid", zap.Error(err))
+		logger.Error("Config is invalid", "error", err)
 		return
 	}
-	logger.Info("Config loaded", zap.Any("config", cfg))
+	logger.Info("Config loaded", slog.Any("config", cfg))
 
 	watcher := watcher.New(
 		watcher.Config{
@@ -64,7 +60,7 @@ func main() {
 			PlayedGap: cfg.PlayedGap,
 			Players:   cfg.Players,
 		},
-		logger.Named("watcher"),
+		logger.With("component", "watcher"),
 	)
 
 	ch, watcherDone := watcher.Run(ctx)
@@ -79,16 +75,16 @@ func main() {
 			KhaleesiThreshold: cfg.KhaleesiThreshold,
 		},
 		ch,
-		logger.Named("bot"),
+		logger.With("component", "bot"),
 	)
 	if err != nil {
-		logger.Error("Failed to create bot", zap.Error(err))
+		logger.Error("Failed to create bot", "error", err)
 		return
 	}
 
 	botDone, err := bot.Run(ctx)
 	if err != nil {
-		logger.Error("Error while running bot", zap.Error(err))
+		logger.Error("Error while running bot", "error", err)
 		return
 	}
 

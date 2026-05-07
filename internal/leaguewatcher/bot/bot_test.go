@@ -3,6 +3,8 @@ package bot
 import (
 	"context"
 	"fmt"
+	"io"
+	"log/slog"
 	"os"
 	"testing"
 	"time"
@@ -11,7 +13,6 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/matryer/is"
-	"go.uber.org/zap"
 )
 
 func TestBot(t *testing.T) {
@@ -28,7 +29,7 @@ func TestBot(t *testing.T) {
 	bot, err := New(Config{
 		Token:   token,
 		OwnerID: "cauchy2384",
-	}, ch, zap.NewNop())
+	}, ch, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	is.NoErr(err)
 
 	_, err = bot.Run(ctx)
