@@ -1,7 +1,6 @@
 package bot
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"log/slog"
@@ -16,7 +15,7 @@ import (
 )
 
 func TestBot(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	is := is.New(t)
 
 	token := os.Getenv("BOT_DISCORD_TOKEN")
@@ -77,7 +76,7 @@ func TestKek(t *testing.T) {
 	is.NoErr(err)
 
 	rdy := make(chan struct{})
-	defer close(rdy)
+	t.Cleanup(func() { close(rdy) })
 
 	dg.AddHandler(func(s *discordgo.Session, event *discordgo.Ready) {
 		rdy <- struct{}{}

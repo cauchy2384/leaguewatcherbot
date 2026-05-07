@@ -16,7 +16,6 @@ import (
 func TestWatcher(t *testing.T) {
 	t.Skip("\todo fix this test")
 
-	ctx := context.Background()
 	is := is.New(t)
 
 	cfg := Config{
@@ -34,7 +33,7 @@ func TestWatcher(t *testing.T) {
 	}))
 	watcher := New(cfg, logger)
 
-	ctx, cancel := context.WithTimeout(ctx, 3*cfg.Period)
+	ctx, cancel := context.WithTimeout(t.Context(), 3*cfg.Period)
 
 	ch, done := watcher.Run(ctx)
 
