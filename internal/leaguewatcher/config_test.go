@@ -305,3 +305,63 @@ func TestConfigManager_Reload_DopplerError(t *testing.T) {
 	is.True(err != nil)                                               // Should error
 	is.True(strings.Contains(err.Error(), "failed to fetch secrets")) // Error should mention Doppler
 }
+
+func TestConfigManager_Reload_IntegrationWithDoppler(t *testing.T) {
+	t.Parallel()
+
+	// Skip if DOPPLER_TOKEN not available
+	dopplerToken := os.Getenv("DOPPLER_TOKEN")
+	if dopplerToken == "" {
+		t.Skip("DOPPLER_TOKEN is not set")
+	}
+
+	// Create logger
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+		Level: slog.LevelError, // Suppress logs during tests
+	}))
+
+	// Create ConfigManager with real Doppler token
+	cm, err := NewConfigManager(dopplerToken, logger)
+	if err != nil {
+		t.Fatalf("failed to create ConfigManager: %v", err)
+	}
+
+	// Perform reload from real Doppler API
+	err = cm.Reload(context.Background())
+	if err != nil {
+		t.Fatalf("failed to reload config from Doppler: %v", err)
+	}
+
+	// Get config and validate
+	cfg := cm.Get()
+
+	// Use matryer/is for assertions
+	is := is.New(t)
+
+	// Validate all duration fields are set
+	is.True(cfg.PollPeriod > 0) // poll_period must be positive
+	is.True(cfg.PlayedGap > 0)  // played_gap must be positive
+
+	// Validate all string fields are not empty
+	is.True(cfg.ChannelID != "")    // channel_id must be set
+	is.True(cfg.DiscordToken != "") // discord_token must be set
+	is.True(cfg.OwnerID != "")      // owner_id must be set
+
+	// Validate optional KhaleesiThreshold (if set, must be >= 0)
+	if cfg.KhaleesiThreshold != nil {
+		is.True(*cfg.KhaleesiThreshold >= 0) // khaleesi_threshold must be non-negative
+	}
+
+	// Validate Players list
+	is.True(len(cfg.Players) >= 1) // must have at least 1 player
+
+	// Validate first player has non-empty values
+	player := cfg.Players[0]
+	is.True(player.Name != "")     // player name must be set
+	is.True(player.Tag != "")      // player tag must be set
+	is.True(player.Region != "")   // player region must be set
+	is.True(player.RealName != "") // player real name must be set
+
+	// Optional: Log success for visibility
+	t.Logf("Successfully loaded config from Doppler with %d players", len(cfg.Players))
+}
