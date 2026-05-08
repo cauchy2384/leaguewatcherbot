@@ -91,8 +91,14 @@ type SecretProvider interface {
 type dopplerSecretProvider struct{}
 
 func (d *dopplerSecretProvider) ListSecrets(ctx context.Context) (map[string]*doppler.SecretValue, error) {
-	secrets, _, err := secret.List(ctx, nil)
-	return secrets, err
+	secrets, _, err := secret.List(ctx, &doppler.SecretListOptions{
+		Project: "leaguewatcherbot",
+		Config:  "prd",
+	})
+	if err != nil {
+		return nil, err
+	}
+	return secrets, nil
 }
 
 // ConfigManager manages configuration loaded from Doppler with hot reload support
