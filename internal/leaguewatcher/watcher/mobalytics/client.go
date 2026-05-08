@@ -26,9 +26,14 @@ func NewClient(logger *slog.Logger) *Client {
 		Timeout: 30 * time.Second,
 	}
 
+	gqlClient := graphql.NewClient(mobaAPI, &client,
+		graphql.WithRetry(3),
+		graphql.WithRetryExponentialRate(1.5),
+	)
+
 	return &Client{
 		client: &client,
-		gql:    graphql.NewClient(mobaAPI, &client),
+		gql:    gqlClient,
 		champs: make(map[int]leaguewatcher.Champion),
 		logger: logger,
 	}
