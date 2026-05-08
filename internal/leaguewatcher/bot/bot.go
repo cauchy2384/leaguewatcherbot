@@ -38,6 +38,18 @@ type Config struct {
 	KhaleesiThreshold *int
 }
 
+// LogValue implements slog.LogValuer to prevent secrets from being logged
+func (cfg Config) LogValue() slog.Value {
+	return slog.GroupValue(
+		slog.String("token", "***REDACTED***"),
+		slog.String("owner_id", "***REDACTED***"),
+		slog.String("pidors_file", cfg.PidorsFile),
+		slog.String("log_file", cfg.LogFile),
+		slog.String("channel_id", cfg.ChannelID),
+		slog.Any("khaleesi_threshold", cfg.KhaleesiThreshold),
+	)
+}
+
 func New(cfg Config, matchesCh chan leaguewatcher.Match, logger *slog.Logger) (*Bot, error) {
 	logger.Info("bot created", slog.Any("config", cfg))
 

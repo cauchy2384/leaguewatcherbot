@@ -49,8 +49,8 @@ func main() {
 		return
 	}
 
-	// Start auto-reload every 5 minutes
-	configMgr.StartAutoReload(ctx, 5*time.Minute)
+	// Start auto-reload every 5 minutes and capture done channel for graceful shutdown
+	autoReloadDone := configMgr.StartAutoReload(ctx, 5*time.Minute)
 
 	// Get initial config
 	cfg := configMgr.Get()
@@ -69,8 +69,8 @@ func main() {
 
 	bot, err := bot.New(
 		bot.Config{
-			Token:             os.Getenv("BOT_DISCORD_TOKEN"),
-			OwnerID:           os.Getenv("BOT_OWNER_ID"),
+			Token:             cfg.DiscordToken,
+			OwnerID:           cfg.OwnerID,
 			PidorsFile:        filepath.Join(exPath, "pidors.json"),
 			LogFile:           filepath.Join(exPath, "log.json"),
 			ChannelID:         cfg.ChannelID,
@@ -95,6 +95,7 @@ func main() {
 	<-killSignal
 	cancel()
 
+	<-autoReloadDone
 	<-watcherDone
 	<-botDone
 }

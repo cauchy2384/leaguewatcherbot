@@ -20,6 +20,10 @@ type Config struct {
 	Players           []Player `yaml:"players"`
 	ChannelID         string   `yaml:"channel_id"`
 	KhaleesiThreshold *int     `yaml:"khaleesi_threshold,omitempty"`
+
+	// Secrets from Doppler (never logged)
+	DiscordToken string `yaml:"-"` // BOT_DISCORD_TOKEN
+	OwnerID      string `yaml:"-"` // BOT_OWNER_ID
 }
 
 func (cfg Config) IsValid() error {
@@ -54,15 +58,50 @@ func (cfg Config) IsValid() error {
 		return fmt.Errorf("khaleesi_threshold must be >= 0")
 	}
 
+	if cfg.DiscordToken == "" {
+		return fmt.Errorf("discord token must not be empty")
+	}
+
+	if cfg.OwnerID == "" {
+		return fmt.Errorf("owner ID must not be empty")
+	}
+
 	return nil
+}
+
+// LogValue implements slog.LogValuer to prevent secrets from being logged
+func (cfg Config) LogValue() slog.Value {
+	return slog.GroupValue(
+		slog.Duration("poll_period", cfg.PollPeriod),
+		slog.Duration("played_gap", cfg.PlayedGap),
+		slog.Int("num_players", len(cfg.Players)),
+		slog.String("channel_id", cfg.ChannelID),
+		slog.Any("khaleesi_threshold", cfg.KhaleesiThreshold),
+		slog.String("discord_token", "***REDACTED***"),
+		slog.String("owner_id", "***REDACTED***"),
+	)
+}
+
+// SecretProvider is an interface for fetching secrets (enables testing with fakes)
+type SecretProvider interface {
+	ListSecrets(ctx context.Context) (map[string]*doppler.SecretValue, error)
+}
+
+// dopplerSecretProvider is the real implementation using Doppler SDK
+type dopplerSecretProvider struct{}
+
+func (d *dopplerSecretProvider) ListSecrets(ctx context.Context) (map[string]*doppler.SecretValue, error) {
+	secrets, _, err := secret.List(ctx, nil)
+	return secrets, err
 }
 
 // ConfigManager manages configuration loaded from Doppler with hot reload support
 type ConfigManager struct {
-	mu     sync.RWMutex
-	config Config
-	logger *slog.Logger
-	token  string
+	mu             sync.RWMutex
+	config         Config
+	logger         *slog.Logger
+	token          string
+	secretProvider SecretProvider
 }
 
 // NewConfigManager creates a new ConfigManager with the given Doppler token
@@ -76,18 +115,27 @@ func NewConfigManager(token string, logger *slog.Logger) (*ConfigManager, error)
 	doppler.Key = token
 
 	return &ConfigManager{
-		token:  token,
-		logger: logger,
+		token:          token,
+		logger:         logger,
+		secretProvider: &dopplerSecretProvider{},
 	}, nil
+}
+
+// newConfigManagerWithProvider creates a ConfigManager with a custom SecretProvider (for testing)
+func newConfigManagerWithProvider(token string, logger *slog.Logger, provider SecretProvider) *ConfigManager {
+	return &ConfigManager{
+		token:          token,
+		logger:         logger,
+		secretProvider: provider,
+	}
 }
 
 // Reload fetches the latest configuration from Doppler and updates the internal config
 func (cm *ConfigManager) Reload(ctx context.Context) error {
 	cm.logger.Info("reloading configuration from Doppler")
 
-	// Fetch all secrets (Service Token is already scoped to project/config)
-	// For service tokens, we don't need to specify project and config
-	secrets, _, err := secret.List(ctx, nil)
+	// Use the secret provider (real or fake for testing)
+	secrets, err := cm.secretProvider.ListSecrets(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to fetch secrets from Doppler: %w", err)
 	}
@@ -136,6 +184,16 @@ func (cm *ConfigManager) Reload(ctx context.Context) error {
 		newConfig.Players = players
 	}
 
+	// Parse discord_token (required)
+	if discordTokenSecret, ok := secrets["BOT_DISCORD_TOKEN"]; ok && discordTokenSecret.Computed != nil {
+		newConfig.DiscordToken = *discordTokenSecret.Computed
+	}
+
+	// Parse owner_id (required)
+	if ownerIDSecret, ok := secrets["BOT_OWNER_ID"]; ok && ownerIDSecret.Computed != nil {
+		newConfig.OwnerID = *ownerIDSecret.Computed
+	}
+
 	// Validate the new config
 	if err := newConfig.IsValid(); err != nil {
 		return fmt.Errorf("invalid configuration from Doppler: %w", err)
@@ -165,11 +223,16 @@ func (cm *ConfigManager) GetPlayers() []Player {
 }
 
 // StartAutoReload starts a background goroutine that periodically reloads configuration from Doppler
-func (cm *ConfigManager) StartAutoReload(ctx context.Context, interval time.Duration) {
+// Returns a channel that closes when the goroutine exits (for graceful shutdown)
+func (cm *ConfigManager) StartAutoReload(ctx context.Context, interval time.Duration) <-chan struct{} {
+	done := make(chan struct{})
 	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
 
 	go func() {
+		defer close(done)
+		defer ticker.Stop()
+		defer cm.logger.Info("auto-reload stopped")
+
 		for {
 			select {
 			case <-ticker.C:
@@ -177,9 +240,10 @@ func (cm *ConfigManager) StartAutoReload(ctx context.Context, interval time.Dura
 					cm.logger.Error("failed to auto-reload configuration", "error", err)
 				}
 			case <-ctx.Done():
-				cm.logger.Info("stopping auto-reload")
 				return
 			}
 		}
 	}()
+
+	return done
 }
