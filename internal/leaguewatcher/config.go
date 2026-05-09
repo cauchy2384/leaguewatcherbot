@@ -31,11 +31,11 @@ type Config struct {
 	GeminiModel        string `yaml:"-"` // GEMINI_MODEL
 
 	// Vertex AI parameters (from Doppler)
-	GeminiTemperature      float32 `yaml:"-"` // GEMINI_TEMPERATURE
-	GeminiTopP             float32 `yaml:"-"` // GEMINI_TOP_P
-	GeminiTopK             int32   `yaml:"-"` // GEMINI_TOP_K
-	GeminiMaxOutputTokens  int32   `yaml:"-"` // GEMINI_MAX_OUTPUT_TOKENS
-	GeminiThinkingBudget   int32   `yaml:"-"` // GEMINI_THINKING_BUDGET
+	GeminiTemperature     float32 `yaml:"-"` // GEMINI_TEMPERATURE
+	GeminiTopP            float32 `yaml:"-"` // GEMINI_TOP_P
+	GeminiTopK            int32   `yaml:"-"` // GEMINI_TOP_K
+	GeminiMaxOutputTokens int32   `yaml:"-"` // GEMINI_MAX_OUTPUT_TOKENS
+	GeminiThinkingBudget  int32   `yaml:"-"` // GEMINI_THINKING_BUDGET
 }
 
 func (cfg Config) IsValid() error {
