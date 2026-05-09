@@ -140,6 +140,42 @@ func TestConfigManager_Reload_Success(t *testing.T) {
 	is.Equal(len(cfg.Players), 2)
 	is.Equal(cfg.Players[0].Name, "player1")
 	is.Equal(cfg.Players[1].RealName, "Player Two")
+
+	// Verify Gemini parameter defaults
+	is.Equal(cfg.GeminiTemperature, float32(0.4))
+	is.Equal(cfg.GeminiTopP, float32(0.95))
+	is.Equal(cfg.GeminiTopK, int32(40))
+	is.Equal(cfg.GeminiMaxOutputTokens, int32(2048))
+	is.Equal(cfg.GeminiThinkingBudget, int32(300))
+}
+
+func TestConfigManager_Reload_GeminiParams(t *testing.T) {
+	t.Parallel()
+	is := is.New(t)
+
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+		Level: slog.LevelError,
+	}))
+
+	secrets := createTestSecrets()
+	secrets["GEMINI_TEMPERATURE"] = &doppler.SecretValue{Computed: stringPtr("0.7")}
+	secrets["GEMINI_TOP_P"] = &doppler.SecretValue{Computed: stringPtr("0.8")}
+	secrets["GEMINI_TOP_K"] = &doppler.SecretValue{Computed: stringPtr("20")}
+	secrets["GEMINI_MAX_OUTPUT_TOKENS"] = &doppler.SecretValue{Computed: stringPtr("1024")}
+	secrets["GEMINI_THINKING_BUDGET"] = &doppler.SecretValue{Computed: stringPtr("500")}
+
+	fakeProvider := newFakeSecretProvider(secrets)
+	cm := newConfigManagerWithProvider("test-token", logger, fakeProvider)
+
+	err := cm.Reload(context.Background())
+	is.NoErr(err)
+
+	cfg := cm.Get()
+	is.Equal(cfg.GeminiTemperature, float32(0.7))
+	is.Equal(cfg.GeminiTopP, float32(0.8))
+	is.Equal(cfg.GeminiTopK, int32(20))
+	is.Equal(cfg.GeminiMaxOutputTokens, int32(1024))
+	is.Equal(cfg.GeminiThinkingBudget, int32(500))
 }
 
 func TestConfigManager_Reload_MissingRequiredSecret(t *testing.T) {

@@ -29,6 +29,18 @@ func generateWithVertexAI(ctx context.Context, cfg leaguewatcher.Config, query s
 	// Get generative model
 	model := client.GenerativeModel(cfg.GeminiModel)
 
+	// Set generation parameters
+	model.Temperature = &cfg.GeminiTemperature
+	model.TopP = &cfg.GeminiTopP
+	model.TopK = &cfg.GeminiTopK
+	model.MaxOutputTokens = &cfg.GeminiMaxOutputTokens
+
+	// Set thinking budget if model supports it (Gemini 2.0 Thinking)
+	model.ThinkingConfig = &genai.ThinkingConfig{
+		IncludeThoughts: nil, // We don't need to see thoughts in Discord
+		ThinkingBudget:  &cfg.GeminiThinkingBudget,
+	}
+
 	// Set system instruction if provided
 	if cfg.GeminiSystemPrompt != "" {
 		model.SystemInstruction = &genai.Content{

@@ -29,6 +29,13 @@ type Config struct {
 	GCPSA              string `yaml:"-"` // GCP_SA
 	GeminiSystemPrompt string `yaml:"-"` // GEMINI_SYSTEM_PROMPT
 	GeminiModel        string `yaml:"-"` // GEMINI_MODEL
+
+	// Vertex AI parameters (from Doppler)
+	GeminiTemperature      float32 `yaml:"-"` // GEMINI_TEMPERATURE
+	GeminiTopP             float32 `yaml:"-"` // GEMINI_TOP_P
+	GeminiTopK             int32   `yaml:"-"` // GEMINI_TOP_K
+	GeminiMaxOutputTokens  int32   `yaml:"-"` // GEMINI_MAX_OUTPUT_TOKENS
+	GeminiThinkingBudget   int32   `yaml:"-"` // GEMINI_THINKING_BUDGET
 }
 
 func (cfg Config) IsValid() error {
@@ -88,6 +95,11 @@ func (cfg Config) LogValue() slog.Value {
 		slog.String("gcp_location", cfg.GCPLocation),
 		slog.String("gcp_sa", "***REDACTED***"),
 		slog.String("gemini_model", cfg.GeminiModel),
+		slog.Float64("gemini_temperature", float64(cfg.GeminiTemperature)),
+		slog.Float64("gemini_top_p", float64(cfg.GeminiTopP)),
+		slog.Int("gemini_top_k", int(cfg.GeminiTopK)),
+		slog.Int("gemini_max_output_tokens", int(cfg.GeminiMaxOutputTokens)),
+		slog.Int("gemini_thinking_budget", int(cfg.GeminiThinkingBudget)),
 	)
 }
 
@@ -236,6 +248,47 @@ func (cm *ConfigManager) Reload(ctx context.Context) error {
 	}
 	if newConfig.GeminiModel == "" {
 		newConfig.GeminiModel = "gemini-2.0-flash-exp"
+	}
+
+	// Parse Gemini parameters with defaults
+	newConfig.GeminiTemperature = 0.4
+	if tempSecret, ok := secrets["GEMINI_TEMPERATURE"]; ok && tempSecret.Computed != nil {
+		temp, err := strconv.ParseFloat(*tempSecret.Computed, 32)
+		if err == nil {
+			newConfig.GeminiTemperature = float32(temp)
+		}
+	}
+
+	newConfig.GeminiTopP = 0.95
+	if topPSecret, ok := secrets["GEMINI_TOP_P"]; ok && topPSecret.Computed != nil {
+		tp, err := strconv.ParseFloat(*topPSecret.Computed, 32)
+		if err == nil {
+			newConfig.GeminiTopP = float32(tp)
+		}
+	}
+
+	newConfig.GeminiTopK = 40
+	if topKSecret, ok := secrets["GEMINI_TOP_K"]; ok && topKSecret.Computed != nil {
+		tk, err := strconv.Atoi(*topKSecret.Computed)
+		if err == nil {
+			newConfig.GeminiTopK = int32(tk)
+		}
+	}
+
+	newConfig.GeminiMaxOutputTokens = 2048
+	if maxTokensSecret, ok := secrets["GEMINI_MAX_OUTPUT_TOKENS"]; ok && maxTokensSecret.Computed != nil {
+		mt, err := strconv.Atoi(*maxTokensSecret.Computed)
+		if err == nil {
+			newConfig.GeminiMaxOutputTokens = int32(mt)
+		}
+	}
+
+	newConfig.GeminiThinkingBudget = 300
+	if thinkingBudgetSecret, ok := secrets["GEMINI_THINKING_BUDGET"]; ok && thinkingBudgetSecret.Computed != nil {
+		tb, err := strconv.Atoi(*thinkingBudgetSecret.Computed)
+		if err == nil {
+			newConfig.GeminiThinkingBudget = int32(tb)
+		}
 	}
 
 	// Validate the new config
