@@ -64,6 +64,16 @@ go vet ./...    # Run Go linter (REQUIRED before commit)
 
 ---
 
+## Development Guidelines
+
+**CRITICAL**: All development work **MUST** occur within a dedicated feature branch. Never commit directly to the `main` or `master` branches.
+
+1. **Branch Naming**: Use the format `type/description` (e.g., `feat/add-stats-command`, `fix/lp-calculation`).
+2. **Pull Requests**: Submit a PR for every change. Ensure the PR title follows Conventional Commits to trigger appropriate CI actions.
+3. **Review**: All PRs must be reviewed and pass CI before merging.
+
+---
+
 ## Code Organization
 
 ### Where to Add New Features
