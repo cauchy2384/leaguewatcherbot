@@ -71,6 +71,7 @@ go vet ./...    # Run Go linter (REQUIRED before commit)
 1. **Branch Naming**: Use the format `type/description` (e.g., `feat/add-stats-command`, `fix/lp-calculation`).
 2. **Pull Requests**: Submit a PR for every change. Ensure the PR title follows Conventional Commits to trigger appropriate CI actions.
 3. **Review**: All PRs must be reviewed and pass CI before merging.
+4. **Pre-commit Checks**: You **MUST** run `go fmt ./...` and `go vet ./...` and fix all issues before every commit. This is mandatory to pass CI.
 
 ---
 
