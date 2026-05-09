@@ -1,20 +1,15 @@
 package bot
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
-	"fmt"
-	"io"
 	"leaguewatcher/internal/leaguewatcher"
 	"log/slog"
-	"net/http"
 	"os"
 	"testing"
 	"time"
 )
 
-func TestGeminiIntegration(t *testing.T) {
+func TestVertexAIIntegration(t *testing.T) {
 	token := os.Getenv("DOPPLER_TOKEN")
 	if token == "" {
 		t.Skip("DOPPLER_TOKEN not set, skipping integration test")
@@ -34,64 +29,20 @@ func TestGeminiIntegration(t *testing.T) {
 	}
 
 	cfg := cm.Get()
-	if cfg.GeminiAPIKey == "" {
-		t.Skip("GEMINI_API_KEY not found in Doppler, skipping integration test")
+	if cfg.GCPSA == "" || cfg.GCPProjectID == "" {
+		t.Skip("Vertex AI not configured in Doppler (GCP_SA or GCP_PROJECT_ID missing), skipping integration test")
 	}
 
-	// Test the API call logic directly
+	// Test with Russian query using shared helper
 	query := "Сколько боссов в бвл?"
-	reqBody := geminiRequest{
-		Contents: []geminiContent{
-			{
-				Parts: []geminiPart{{Text: query}},
-			},
-		},
-	}
-
-	if cfg.GeminiSystemPrompt != "" {
-		reqBody.SystemInstruction = &geminiSystemInstruction{
-			Parts: geminiPart{Text: cfg.GeminiSystemPrompt},
-		}
-	}
-
-	jsonData, err := json.Marshal(reqBody)
+	answer, err := generateWithVertexAI(ctx, cfg, query)
 	if err != nil {
-		t.Fatalf("failed to marshal gemini request: %v", err)
+		t.Fatalf("failed to call vertex ai: %v", err)
 	}
 
-	url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s", cfg.GeminiModel, cfg.GeminiAPIKey)
-
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonData))
-	if err != nil {
-		t.Fatalf("failed to create http request: %v", err)
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-
-	client := &http.Client{Timeout: 15 * time.Second}
-	resp, err := client.Do(httpReq)
-	if err != nil {
-		t.Fatalf("failed to call gemini api: %v", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		t.Fatalf("gemini api returned error: status=%s, body=%s", resp.Status, string(body))
-	}
-
-	var geminiResp geminiResponse
-	if err := json.NewDecoder(resp.Body).Decode(&geminiResp); err != nil {
-		t.Fatalf("failed to decode gemini response: %v", err)
-	}
-
-	if len(geminiResp.Candidates) == 0 || len(geminiResp.Candidates[0].Content.Parts) == 0 {
-		t.Fatal("gemini returned no candidates or parts")
-	}
-
-	answer := geminiResp.Candidates[0].Content.Parts[0].Text
 	if answer == "" {
-		t.Fatal("gemini returned an empty answer")
+		t.Fatal("vertex ai returned an empty answer")
 	}
 
-	t.Logf("Gemini response: %s", answer)
+	t.Logf("Vertex AI response: %s", answer)
 }

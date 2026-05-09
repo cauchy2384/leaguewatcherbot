@@ -1,110 +1,89 @@
 package bot
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
+	"leaguewatcher/internal/leaguewatcher"
 	"time"
 
+	"cloud.google.com/go/vertexai/genai"
 	"github.com/bwmarrin/discordgo"
+	"google.golang.org/api/option"
 )
 
-type geminiRequest struct {
-	SystemInstruction *geminiSystemInstruction `json:"system_instruction,omitempty"`
-	Contents          []geminiContent          `json:"contents"`
-}
-
-type geminiSystemInstruction struct {
-	Parts geminiPart `json:"parts"`
-}
-
-type geminiContent struct {
-	Parts []geminiPart `json:"parts"`
-}
-
-type geminiPart struct {
-	Text string `json:"text"`
-}
-
-type geminiResponse struct {
-	Candidates []struct {
-		Content struct {
-			Parts []struct {
-				Text string `json:"text"`
-			} `json:"parts"`
-		} `json:"content"`
-	} `json:"candidates"`
-}
-
-func (b *Bot) ask(ctx context.Context, s *discordgo.Session, m *discordgo.MessageCreate, query string) {
-	cfg := b.configMgr.Get()
-	if cfg.GeminiAPIKey == "" {
-		s.ChannelMessageSendReply(m.ChannelID, "I'm not configured for that, sorry!", m.Reference())
-		return
+// generateWithVertexAI calls Vertex AI with the given configuration and query
+func generateWithVertexAI(ctx context.Context, cfg leaguewatcher.Config, query string) (string, error) {
+	// Validate required fields
+	if cfg.GCPSA == "" || cfg.GCPProjectID == "" {
+		return "", fmt.Errorf("vertex ai not configured")
 	}
 
-	reqBody := geminiRequest{
-		Contents: []geminiContent{
-			{
-				Parts: []geminiPart{{Text: query}},
-			},
-		},
+	// Create Vertex AI client
+	client, err := genai.NewClient(ctx, cfg.GCPProjectID, cfg.GCPLocation,
+		option.WithCredentialsJSON([]byte(cfg.GCPSA)))
+	if err != nil {
+		return "", fmt.Errorf("failed to create vertex ai client: %w", err)
 	}
+	defer client.Close()
 
+	// Get generative model
+	model := client.GenerativeModel(cfg.GeminiModel)
+
+	// Set system instruction if provided
 	if cfg.GeminiSystemPrompt != "" {
-		reqBody.SystemInstruction = &geminiSystemInstruction{
-			Parts: geminiPart{Text: cfg.GeminiSystemPrompt},
+		model.SystemInstruction = &genai.Content{
+			Parts: []genai.Part{genai.Text(cfg.GeminiSystemPrompt)},
 		}
 	}
 
-	jsonData, err := json.Marshal(reqBody)
+	// Generate content
+	resp, err := model.GenerateContent(ctx, genai.Text(query))
 	if err != nil {
-		b.logger.Error("failed to marshal gemini request", "error", err)
-		return
+		return "", fmt.Errorf("failed to generate content: %w", err)
 	}
 
-	url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s", cfg.GeminiModel, cfg.GeminiAPIKey)
+	// Extract text from response
+	if len(resp.Candidates) == 0 {
+		return "", nil // Empty response
+	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonData))
+	var text string
+	for _, part := range resp.Candidates[0].Content.Parts {
+		if t, ok := part.(genai.Text); ok {
+			text += string(t)
+		}
+	}
+
+	return text, nil
+}
+
+func (b *Bot) ask(ctx context.Context, s *discordgo.Session, m *discordgo.MessageCreate, query string) {
+	// Get config (hot-reload via ConfigManager)
+	cfg := b.configMgr.Get()
+
+	// Set timeout
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+
+	// Call Vertex AI
+	answer, err := generateWithVertexAI(ctx, cfg, query)
 	if err != nil {
-		b.logger.Error("failed to create http request", "error", err)
-		return
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-
-	client := &http.Client{Timeout: 15 * time.Second}
-	resp, err := client.Do(httpReq)
-	if err != nil {
-		b.logger.Error("failed to call gemini api", "error", err)
-		s.ChannelMessageSendReply(m.ChannelID, "I had trouble contacting the oracle.", m.Reference())
-		return
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		b.logger.Error("gemini api returned error", "status", resp.Status, "body", string(body))
-		s.ChannelMessageSendReply(m.ChannelID, "The oracle is in a bad mood right now.", m.Reference())
+		if err.Error() == "vertex ai not configured" {
+			s.ChannelMessageSendReply(m.ChannelID, "Я не настроен для этого, извини!", m.Reference())
+			b.logger.Error("vertex ai not configured")
+		} else {
+			s.ChannelMessageSendReply(m.ChannelID, "У меня проблемы со связью с оракулом.", m.Reference())
+			b.logger.Error("failed to call vertex ai",
+				"error", err,
+				"model", cfg.GeminiModel,
+				"project", cfg.GCPProjectID,
+				"location", cfg.GCPLocation)
+		}
 		return
 	}
 
-	var geminiResp geminiResponse
-	if err := json.NewDecoder(resp.Body).Decode(&geminiResp); err != nil {
-		b.logger.Error("failed to decode gemini response", "error", err)
-		return
-	}
-
-	if len(geminiResp.Candidates) == 0 || len(geminiResp.Candidates[0].Content.Parts) == 0 {
-		s.ChannelMessageSendReply(m.ChannelID, "The oracle remains silent.", m.Reference())
-		return
-	}
-
-	answer := geminiResp.Candidates[0].Content.Parts[0].Text
 	if answer == "" {
-		s.ChannelMessageSendReply(m.ChannelID, "The oracle's vision is clouded.", m.Reference())
+		s.ChannelMessageSendReply(m.ChannelID, "Оракул хранит молчание.", m.Reference())
 		return
 	}
 

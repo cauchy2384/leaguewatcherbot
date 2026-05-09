@@ -24,7 +24,9 @@ type Config struct {
 	// Secrets from Doppler (never logged)
 	DiscordToken       string `yaml:"-"` // BOT_DISCORD_TOKEN
 	OwnerID            string `yaml:"-"` // BOT_OWNER_ID
-	GeminiAPIKey       string `yaml:"-"` // GEMINI_API_KEY
+	GCPProjectID       string `yaml:"-"` // GCP_PROJECT_ID
+	GCPLocation        string `yaml:"-"` // GCP_LOCATION
+	GCPSA              string `yaml:"-"` // GCP_SA
 	GeminiSystemPrompt string `yaml:"-"` // GEMINI_SYSTEM_PROMPT
 	GeminiModel        string `yaml:"-"` // GEMINI_MODEL
 }
@@ -82,7 +84,9 @@ func (cfg Config) LogValue() slog.Value {
 		slog.Any("khaleesi_threshold", cfg.KhaleesiThreshold),
 		slog.String("discord_token", "***REDACTED***"),
 		slog.String("owner_id", "***REDACTED***"),
-		slog.String("gemini_api_key", "***REDACTED***"),
+		slog.String("gcp_project_id", cfg.GCPProjectID),
+		slog.String("gcp_location", cfg.GCPLocation),
+		slog.String("gcp_sa", "***REDACTED***"),
 		slog.String("gemini_model", cfg.GeminiModel),
 	)
 }
@@ -205,9 +209,20 @@ func (cm *ConfigManager) Reload(ctx context.Context) error {
 		newConfig.OwnerID = *ownerIDSecret.Computed
 	}
 
-	// Parse gemini_api_key
-	if geminiAPIKeySecret, ok := secrets["GEMINI_API_KEY"]; ok && geminiAPIKeySecret.Computed != nil {
-		newConfig.GeminiAPIKey = *geminiAPIKeySecret.Computed
+	// Parse GCP configuration
+	if gcpProjectIDSecret, ok := secrets["GCP_PROJECT_ID"]; ok && gcpProjectIDSecret.Computed != nil {
+		newConfig.GCPProjectID = *gcpProjectIDSecret.Computed
+	}
+
+	if gcpLocationSecret, ok := secrets["GCP_LOCATION"]; ok && gcpLocationSecret.Computed != nil {
+		newConfig.GCPLocation = *gcpLocationSecret.Computed
+	}
+	if newConfig.GCPLocation == "" {
+		newConfig.GCPLocation = "us-central1"
+	}
+
+	if gcpSASecret, ok := secrets["GCP_SA"]; ok && gcpSASecret.Computed != nil {
+		newConfig.GCPSA = *gcpSASecret.Computed
 	}
 
 	// Parse gemini_system_prompt
@@ -220,7 +235,7 @@ func (cm *ConfigManager) Reload(ctx context.Context) error {
 		newConfig.GeminiModel = *geminiModelSecret.Computed
 	}
 	if newConfig.GeminiModel == "" {
-		newConfig.GeminiModel = "gemini-2.0-flash"
+		newConfig.GeminiModel = "gemini-2.0-flash-exp"
 	}
 
 	// Validate the new config
