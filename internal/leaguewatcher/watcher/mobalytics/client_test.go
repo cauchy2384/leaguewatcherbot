@@ -30,8 +30,8 @@ func TestClientMatches(t *testing.T) {
 			is := is.New(t)
 
 			matches, err := client.Matches(ctx, tt.region, tt.name, tt.tag)
-			fmt.Println(matches)
 			is.NoErr(err)
+			fmt.Println(matches)
 			is.True(len(matches) > 0)
 		})
 	}

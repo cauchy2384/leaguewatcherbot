@@ -2,6 +2,7 @@ package watcher
 
 import (
 	"context"
+	"fmt"
 	"leaguewatcher/internal/leaguewatcher"
 	"leaguewatcher/internal/leaguewatcher/watcher/mobalytics"
 	"leaguewatcher/internal/leaguewatcher/watcher/repository"
@@ -113,6 +114,10 @@ func (w *Watcher) checkPlayers(ctx context.Context, ch chan leaguewatcher.Match)
 			if err != nil {
 				w.logger.Error("failed to get matches", "player", player.Name, "error", err)
 				return err
+			}
+			w.logger.Info("matches fetched", "player", player.Name, "count", len(matches))
+			for i, m := range matches {
+				w.logger.Debug("match detail", "player", player.Name, "idx", i, "id", m.ID, "queue", m.Queue, "kda", fmt.Sprintf("%d/%d/%d", m.Kills, m.Deaths, m.Assists), "lp", m.LP, "win", m.Win, "started_at", m.StartedAt)
 			}
 			if len(matches) == 0 {
 				w.logger.Debug("no matches found", "player", player.Name)

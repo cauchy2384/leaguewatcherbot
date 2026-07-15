@@ -118,7 +118,7 @@ func (b *Bot) Run(ctx context.Context) (chan struct{}, error) {
 			case <-ctx.Done():
 				return
 			case m := <-b.matchesCh:
-				b.logger.Debug("match", slog.Any("match", m))
+				b.logger.Info("match received on channel", "player", m.Player.RealName, "id", m.ID, "queue", m.Queue, "kda", fmt.Sprintf("%d/%d/%d", m.Kills, m.Deaths, m.Assists), "lp", m.LP, "win", m.Win)
 				b.tracks.Fanout(m)
 			}
 		}

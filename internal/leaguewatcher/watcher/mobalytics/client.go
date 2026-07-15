@@ -121,6 +121,16 @@ func (c *Client) Matches(ctx context.Context, region, summoner, tag string,
 		return nil, err
 	}
 	r.Header.Add("Content-Type", "application/json")
+	r.Header.Add("Accept", "application/json")
+	r.Header.Add("Origin", "https://app.mobalytics.gg")
+	r.Header.Add("Referer", "https://app.mobalytics.gg/lol")
+	r.Header.Add("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36")
+	r.Header.Add("Sec-CH-UA", `"Google Chrome";v="135", "Not-A.Brand";v="8", "Chromium";v="135"`)
+	r.Header.Add("Sec-CH-UA-Mobile", "?0")
+	r.Header.Add("Sec-CH-UA-Platform", `"Linux"`)
+	r.Header.Add("Sec-Fetch-Dest", "empty")
+	r.Header.Add("Sec-Fetch-Mode", "cors")
+	r.Header.Add("Sec-Fetch-Site", "same-origin")
 
 	resp, err := c.client.Do(r)
 	if err != nil {
@@ -132,9 +142,14 @@ func (c *Client) Matches(ctx context.Context, region, summoner, tag string,
 	}
 
 	type Response struct {
+		Errors []struct {
+			Message string `json:"message"`
+		} `json:"errors"`
 		Data struct {
 			Lol struct {
 				Player struct {
+					Name         string `json:"name"`
+					Region       string `json:"region"`
 					MatchesHistory struct {
 						Matches []struct {
 							Id       int    `json:"id"`
@@ -175,7 +190,18 @@ func (c *Client) Matches(ctx context.Context, region, summoner, tag string,
 		return nil, err
 	}
 
-	var matches []leaguewatcher.Match
+	c.logger.Debug("api response",
+		"player", respData.Data.Lol.Player.Name,
+		"region", respData.Data.Lol.Player.Region,
+		"matches_count", len(respData.Data.Lol.Player.MatchesHistory.Matches),
+		"errors", len(respData.Errors),
+	)
+
+	if len(respData.Errors) > 0 {
+		return nil, fmt.Errorf("API errors: %v", respData.Errors)
+	}
+
+	matches := make([]leaguewatcher.Match, 0, len(respData.Data.Lol.Player.MatchesHistory.Matches))
 	for _, match := range respData.Data.Lol.Player.MatchesHistory.Matches {
 
 		var teamWon string
@@ -265,6 +291,16 @@ func (c *Client) Champions(ctx context.Context) ([]leaguewatcher.Champion, error
 		return nil, err
 	}
 	r.Header.Add("Content-Type", "application/json")
+	r.Header.Add("Accept", "application/json")
+	r.Header.Add("Origin", "https://app.mobalytics.gg")
+	r.Header.Add("Referer", "https://app.mobalytics.gg/lol")
+	r.Header.Add("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36")
+	r.Header.Add("Sec-CH-UA", `"Google Chrome";v="135", "Not-A.Brand";v="8", "Chromium";v="135"`)
+	r.Header.Add("Sec-CH-UA-Mobile", "?0")
+	r.Header.Add("Sec-CH-UA-Platform", `"Linux"`)
+	r.Header.Add("Sec-Fetch-Dest", "empty")
+	r.Header.Add("Sec-Fetch-Mode", "cors")
+	r.Header.Add("Sec-Fetch-Site", "same-origin")
 
 	resp, err := c.client.Do(r)
 	if err != nil {
