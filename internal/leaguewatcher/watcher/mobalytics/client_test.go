@@ -26,6 +26,11 @@ func (testCookieGetter) Stop() {
 func TestFlareSolverrGetCookie(t *testing.T) {
 	ctx := t.Context()
 
+	// Requires a running FlareSolverr instance
+	if os.Getenv("FLARESOLVERR_URL") == "" {
+		t.Skip("FLARESOLVERR_URL not set — skip FlareSolverr test")
+	}
+
 	flare := flaresolverr.NewClient(slog.New(slog.NewTextHandler(os.Stderr, nil)))
 	defer flare.Stop()
 
@@ -37,6 +42,11 @@ func TestFlareSolverrGetCookie(t *testing.T) {
 
 // TestFlareSolverrCookieCaching tests that cookie is cached and reused.
 func TestFlareSolverrCookieCaching(t *testing.T) {
+	// Requires a running FlareSolverr instance
+	if os.Getenv("FLARESOLVERR_URL") == "" {
+		t.Skip("FLARESOLVERR_URL not set — skip FlareSolverr test")
+	}
+
 	ctx := t.Context()
 
 	flare := flaresolverr.NewClient(slog.New(slog.NewTextHandler(os.Stderr, nil)))
@@ -102,6 +112,10 @@ func (failingCookieGetter) Stop() {
 func TestClientMatches(t *testing.T) {
 	t.Parallel()
 	ctx := t.Context()
+
+	if os.Getenv("FLARESOLVERR_URL") == "" {
+		t.Skip("FLARESOLVERR_URL not set — skip integration test")
+	}
 	client := NewClient(slog.New(slog.NewTextHandler(io.Discard, nil)), testCookieGetter{})
 
 	testCases := []struct {
@@ -128,6 +142,10 @@ func TestClientMatches(t *testing.T) {
 }
 
 func TestClientChampions(t *testing.T) {
+	if os.Getenv("FLARESOLVERR_URL") == "" {
+		t.Skip("FLARESOLVERR_URL not set — skip integration test")
+	}
+
 	ctx := t.Context()
 	client := NewClient(slog.New(slog.NewTextHandler(io.Discard, nil)), testCookieGetter{})
 
