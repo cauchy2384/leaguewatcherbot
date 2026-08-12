@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"leaguewatcher/internal/leaguewatcher"
 	"leaguewatcher/internal/leaguewatcher/watcher/mobalytics"
+	"leaguewatcher/internal/leaguewatcher/watcher/mobalytics/flaresolverr"
 	"leaguewatcher/internal/leaguewatcher/watcher/repository"
 	"log/slog"
+	"sync"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -20,6 +22,11 @@ type Watcher struct {
 
 	api   *mobalytics.Client
 	store *repository.Match
+
+	// errMu protects errState.
+	// key: "region/name/tag", value: last known state (ok or error)
+	errMu    sync.RWMutex
+	errState map[string]string // "ok" or "error"
 }
 
 // ConfigProvider provides access to the current configuration
@@ -48,9 +55,35 @@ func New(cfg Config, configMgr ConfigProvider, logger *slog.Logger) *Watcher {
 		playedGap: cfg.PlayedGap,
 		configMgr: configMgr,
 		logger:    logger,
-		api:       mobalytics.NewClient(logger.With("component", "api")),
+		api:       mobalytics.NewClient(logger.With("component", "api"), flaresolverr.NewClient(logger.With("component", "flare"))),
 		store:     repository.NewMatch(),
+		errState:  make(map[string]string),
 	}
+}
+
+// shouldReportError returns true if we should report an error in Discord.
+// Errors are only shown once (OK→ERROR transition), not on consecutive errors.
+// A successful response resets the state, so the next error will be reported again.
+func (w *Watcher) shouldReportError(playerKey string) bool {
+	w.errMu.Lock()
+	defer w.errMu.Unlock()
+
+	last := w.errState[playerKey]
+	if last == "error" {
+		// Already reported this error, keep quiet
+		return false
+	}
+	// First error or recovery — report it
+	w.errState[playerKey] = "error"
+	return true
+}
+
+// reportOK resets the error state for a player after a successful response.
+// This ensures the next error will be reported again.
+func (w *Watcher) reportOK(playerKey string) {
+	w.errMu.Lock()
+	defer w.errMu.Unlock()
+	w.errState[playerKey] = "ok"
 }
 
 func (w *Watcher) Run(ctx context.Context) (chan leaguewatcher.Match, chan struct{}) {
@@ -87,6 +120,11 @@ func (w *Watcher) Run(ctx context.Context) (chan leaguewatcher.Match, chan struc
 	return ch, done
 }
 
+// GetAPI returns the mobalytics client for external use (e.g., graceful shutdown).
+func (w *Watcher) GetAPI() *mobalytics.Client {
+	return w.api
+}
+
 func (w *Watcher) checkPlayers(ctx context.Context, ch chan leaguewatcher.Match) {
 	wg, ctx := errgroup.WithContext(ctx)
 
@@ -113,9 +151,24 @@ func (w *Watcher) checkPlayers(ctx context.Context, ch chan leaguewatcher.Match)
 			matches, err := w.api.Matches(ctx, player.Region, player.Name, player.Tag)
 			if err != nil {
 				w.logger.Error("failed to get matches", "player", player.Name, "error", err)
-				return err
+				playerKey := fmt.Sprintf("%s/%s/%s", player.Region, player.Name, player.Tag)
+				if w.shouldReportError(playerKey) {
+					// Send error signal to bot — it will report once in Discord
+					select {
+					case ch <- leaguewatcher.Match{
+						Player: player,
+						Queue:  "ERROR",
+					}:
+						w.logger.Info("error reported to discord", "player", player.Name)
+					default:
+					}
+				}
+				return nil
 			}
 			w.logger.Info("matches fetched", "player", player.Name, "count", len(matches))
+
+			playerKey := fmt.Sprintf("%s/%s/%s", player.Region, player.Name, player.Tag)
+			w.reportOK(playerKey)
 			for i, m := range matches {
 				w.logger.Debug("match detail", "player", player.Name, "idx", i, "id", m.ID, "queue", m.Queue, "kda", fmt.Sprintf("%d/%d/%d", m.Kills, m.Deaths, m.Assists), "lp", m.LP, "win", m.Win, "started_at", m.StartedAt)
 			}

@@ -19,6 +19,12 @@ services:
       - BOT_OWNER_ID=${BOT_OWNER_ID}
       - DOPPLER_TOKEN=${DOPPLER_TOKEN}
       - LOG_LEVEL=${LOG_LEVEL:-info}
+      # FlareSolverr proxy for Cloudflare challenge passing
+      - FLARESOLVERR_URL=http://flaresolverr:8191
+
+    # Depends on flaresolverr to ensure it starts first
+    depends_on:
+      - flaresolverr
 
     # Volume strategy:
     # - Named volume for entire /app directory (persistence for pidors.json, log.json)
@@ -42,6 +48,20 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+  # FlareSolverr — Cloudflare challenge solver
+  # Solves Cloudflare Turnstile CAPTCHA that blocks Mobalytics API
+  flaresolverr:
+    image: ghcr.io/flaresolverr/flaresolverr:latest
+    container_name: flaresolverr
+    restart: unless-stopped
+    environment:
+      - LOG_LEVEL=info
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
 
 # Named volume for data persistence
 volumes:

@@ -5,23 +5,38 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"leaguewatcher/internal/leaguewatcher"
 	"log/slog"
 	"net/http"
+	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/hasura/go-graphql-client"
 )
 
 type Client struct {
-	client *http.Client
-	gql    *graphql.Client
-	champs map[int]leaguewatcher.Champion
-	logger *slog.Logger
+	client   *http.Client
+	gql      *graphql.Client
+	champs   map[int]leaguewatcher.Champion
+	logger   *slog.Logger
+	flare    CookieGetter
+	cookieMu sync.RWMutex
+	cookie   string
 }
 
-func NewClient(logger *slog.Logger) *Client {
+// CookieGetter is the interface for obtaining cf_clearance cookies.
+// flaresolverr.Client implements this.
+type CookieGetter interface {
+	GetCookie(ctx context.Context) string
+	// Stop stops the background fetcher (if any).
+	// Should be called when the application is shutting down.
+	Stop()
+}
+
+func NewClient(logger *slog.Logger, fl CookieGetter) *Client {
 	client := http.Client{
 		Timeout: 30 * time.Second,
 	}
@@ -36,7 +51,39 @@ func NewClient(logger *slog.Logger) *Client {
 		gql:    gqlClient,
 		champs: make(map[int]leaguewatcher.Champion),
 		logger: logger,
+		flare:  fl,
 	}
+}
+
+// Stop stops the background cookie fetcher.
+// Should be called when the application is shutting down.
+func (c *Client) Stop() {
+	c.flare.Stop()
+}
+
+func (c *Client) getCookie(ctx context.Context) string {
+	c.cookieMu.RLock()
+	val := c.cookie
+	c.cookieMu.RUnlock()
+	if val != "" {
+		c.logger.Debug("cf_clearance cached", "ttl", "14m")
+		return val
+	}
+
+	cookie := c.flare.GetCookie(ctx)
+	if cookie != "" {
+		c.cookieMu.Lock()
+		c.cookie = cookie
+		c.cookieMu.Unlock()
+		c.logger.Info("cf_clearance fetched via FlareSolverr", "ttl", 14*time.Minute)
+	}
+	return cookie
+}
+
+func (c *Client) clearCookie() {
+	c.cookieMu.Lock()
+	c.cookie = ""
+	c.cookieMu.Unlock()
 }
 
 const (
@@ -132,12 +179,27 @@ func (c *Client) Matches(ctx context.Context, region, summoner, tag string,
 	r.Header.Add("Sec-Fetch-Mode", "cors")
 	r.Header.Add("Sec-Fetch-Site", "same-origin")
 
+	// Get cf_clearance cookie (auto-fetched via FlareSolverr)
+	cookie := c.getCookie(r.Context())
+	if cookie != "" {
+		r.Header.Set("Cookie", "cf_clearance="+cookie)
+	}
+
 	resp, err := c.client.Do(r)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusForbidden {
+		// Cloudflare challenge may have changed — discard cached cookie
+		c.clearCookie()
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		fmt.Fprintf(os.Stderr, "[CLIENT_DEBUG] HTTP 403 — resetting cf_clearance, body: %s\n", string(bodyBytes))
+		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
 	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		fmt.Fprintf(os.Stderr, "[CLIENT_DEBUG] API error: HTTP %d — body: %s\n", resp.StatusCode, string(bodyBytes))
 		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
 
@@ -302,12 +364,27 @@ func (c *Client) Champions(ctx context.Context) ([]leaguewatcher.Champion, error
 	r.Header.Add("Sec-Fetch-Mode", "cors")
 	r.Header.Add("Sec-Fetch-Site", "same-origin")
 
+	// Get cf_clearance cookie (auto-fetched via FlareSolverr)
+	cookie := c.getCookie(r.Context())
+	if cookie != "" {
+		r.Header.Set("Cookie", "cf_clearance="+cookie)
+	}
+
 	resp, err := c.client.Do(r)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusForbidden {
+		// Cloudflare challenge may have changed — discard cached cookie
+		c.clearCookie()
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		fmt.Fprintf(os.Stderr, "[CLIENT_DEBUG] HTTP 403 — resetting cf_clearance, body: %s\n", string(bodyBytes))
+		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
 	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		fmt.Fprintf(os.Stderr, "[CLIENT_DEBUG] API error: HTTP %d — body: %s\n", resp.StatusCode, string(bodyBytes))
 		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
 

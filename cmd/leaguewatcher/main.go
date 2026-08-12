@@ -96,6 +96,12 @@ func main() {
 	<-killSignal
 	cancel()
 
+	// Stop the FlareSolverr background fetcher
+	api := watcher.GetAPI()
+	if api != nil {
+		api.Stop()
+	}
+
 	<-autoReloadDone
 	<-watcherDone
 	<-botDone

@@ -197,6 +197,13 @@ func (b *Bot) untrack(_ context.Context, s *discordgo.Session, m *discordgo.Mess
 
 func matchToMessage(m leaguewatcher.Match) discordgo.MessageSend {
 
+	// Handle error state — only shown once (OK→ERROR), not on consecutive errors
+	if m.Queue == "ERROR" {
+		return discordgo.MessageSend{
+			Content: fmt.Sprintf("⚠️ %s — failed to fetch data from Mobalytics (Cloudflare/API issue). Will retry next cycle.", m.Player.RealName),
+		}
+	}
+
 	action := action(m.Win)
 	emo := smiley(m.Win)
 	content := fmt.Sprintf("%s %s %s", m.Player.RealName, action, emo)

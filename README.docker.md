@@ -86,6 +86,66 @@ docker-compose ps
 
 The bot is now running and monitoring the configured players!
 
+## Cloudflare Challenge Passing (FlareSolverr)
+
+Mobalytics uses Cloudflare Turnstile protection that blocks all Go HTTP requests. The bot uses an internal FlareSolverr Docker container to automatically solve the challenge and maintain a valid `cf_clearance` cookie.
+
+### How It Works
+
+1. When the Go HTTP client needs a `cf_clearance` cookie, it queries the FlareSolverr container at `http://flaresolverr:8191/v1`
+2. FlareSolverr launches a headless browser, navigates to `https://app.mobalytics.gg/lol`
+3. The browser passes Cloudflare Turnstile → Cloudflare sets `cf_clearance` cookie
+4. Go reads the cookie value from the FlareSolverr response and caches it for **14 minutes**
+5. If Mobalytics returns HTTP 403 (cookie rejected), the cache is reset and FlareSolverr fetches a fresh cookie
+6. Cookie solving takes ~10-20 seconds on first request, subsequent requests use the cached cookie
+
+### Configuration
+
+FlareSolverr is included as a built-in service in `docker-compose.yml`. No additional configuration needed — just:
+
+```bash
+docker-compose up -d
+```
+
+The compose file automatically:
+- Pulls `ghcr.io/flaresolverr/flaresolverr:latest`
+- Sets up networking between `leaguewatcher` and `flaresolverr` containers
+- Ensures FlareSolverr starts before the bot
+
+### Troubleshooting
+
+**First API call is slow (~15 seconds)**
+
+This is normal — FlareSolverr needs to launch a browser and solve the Cloudflare challenge. Subsequent calls are near-instant.
+
+**Repeated 403 errors**
+
+Check logs:
+```bash
+docker-compose logs leaguewatcher | grep "CLIENT_DEBUG"
+```
+
+Common causes:
+1. **VPN is down** — Mobalytics requires your VPN. Without it, Cloudflare blocks all requests from your server IP.
+2. **FlareSolverr timeout** — If the container can't reach the internet, the challenge times out.
+3. **Cloudflare updated** — Rare, but Cloudflare occasionally changes their challenge system. Restart FlareSolverr to get a fresh browser instance:
+   ```bash
+   docker-compose restart flaresolverr
+   ```
+
+**High memory usage**
+
+FlareSolverr uses ~100-150MB when solving a challenge, then stays idle. If you see sustained high memory:
+```yaml
+# In docker-compose.yml
+services:
+  flaresolverr:
+    deploy:
+      resources:
+        limits:
+          memory: 512M  # Default is 256M
+```
+
 ## Automated Builds & Versioning
 
 Docker images are automatically built and published to GitHub Container Registry (GHCR) via GitHub Actions with **automatic semantic versioning**.
