@@ -117,7 +117,14 @@ func (b *Bot) Run(ctx context.Context) (chan struct{}, error) {
 			select {
 			case <-ctx.Done():
 				return
-			case m := <-b.matchesCh:
+			case m, ok := <-b.matchesCh:
+				if !ok {
+					// Channel closed (watcher gave up on sync) — stop
+					// consuming; a closed channel keeps yielding zero-value
+					// matches which would spam the channel with empty data.
+					b.logger.Info("matches channel closed, stopping consumer")
+					return
+				}
 				b.logger.Info("match received on channel", "player", m.Player.RealName, "id", m.ID, "queue", m.Queue, "kda", fmt.Sprintf("%d/%d/%d", m.Kills, m.Deaths, m.Assists), "lp", m.LP, "win", m.Win)
 				b.tracks.Fanout(m)
 			}
