@@ -1,3 +1,10 @@
+## [1.6.1](https://github.com/cauchy2384/leaguewatcherbot/compare/v1.6.0...v1.6.1) (2026-09-29)
+
+
+### Bug Fixes
+
+* harden FlareSolverr integration (startup race, channel-closed spam, client timeout, readiness gate) ([#19](https://github.com/cauchy2384/leaguewatcherbot/issues/19)) ([95514e8](https://github.com/cauchy2384/leaguewatcherbot/commit/95514e880855077d78148d98c45e6fa57250b499))
+
 # [1.6.0](https://github.com/cauchy2384/leaguewatcherbot/compare/v1.5.1...v1.6.0) (2026-08-16)
 
 
