@@ -54,8 +54,11 @@ func (c *CookieGetter) BaseURL() string {
 // FLARESOLVERR_URL env var: e.g. "http://flaresolverr:8191" or "http://localhost:8191"
 func NewClient(logger *slog.Logger) *CookieGetter {
 	cg := &CookieGetter{
-		baseURL:  os.Getenv("FLARESOLVERR_URL") + "/v1",
-		client:   &http.Client{Timeout: 30 * time.Second},
+		baseURL: os.Getenv("FLARESOLVERR_URL") + "/v1",
+		// The solver answers in ~30s (its challenge-detection window), so a 30s
+		// client timeout is right at the edge. 90s gives headroom so the client
+		// waits for the solver's response and collects the cf_clearance cookie.
+		client:   &http.Client{Timeout: 90 * time.Second},
 		logger:   logger,
 		stopChan: make(chan struct{}),
 	}
@@ -143,6 +146,20 @@ func (c *CookieGetter) GetCookie(ctx context.Context) string {
 			c.logger.Info("flare solved", "ttl", 14*time.Minute)
 		}
 	})
+
+	// If the solve failed (cookie still empty), reset the Once so the
+	// next call retries — handles FlareSolverr still starting up
+	// (connection refused). Reset happens OUTSIDE the Do callback:
+	// reassigning the Once from inside its own callback would corrupt
+	// the mutex the callback is currently holding.
+	c.mu.RLock()
+	needRetry := c.cookie == ""
+	c.mu.RUnlock()
+	if needRetry {
+		c.mu.Lock()
+		c.solveOnce = sync.Once{}
+		c.mu.Unlock()
+	}
 
 	c.mu.RLock()
 	defer c.mu.RUnlock()

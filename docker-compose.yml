@@ -22,9 +22,11 @@ services:
       # FlareSolverr proxy for Cloudflare challenge passing
       - FLARESOLVERR_URL=http://flaresolverr:8191
 
-    # Depends on flaresolverr to ensure it starts first
+    # Wait for flaresolverr to be READY (API listening on 8191), not just
+    # started: plain `depends_on` only guarantees service_started.
     depends_on:
-      - flaresolverr
+      flaresolverr:
+        condition: service_healthy
 
     # Volume strategy:
     # - Named volume for entire /app directory (persistence for pidors.json, log.json)
@@ -57,6 +59,16 @@ services:
     restart: unless-stopped
     environment:
       - LOG_LEVEL=info
+    # Readiness probe: the image is Node-based, so `node` is available
+    # inside the container. The probe TCP-connects to the API port (8191)
+    # from the container's own loopback. The bot's depends_on
+    # (condition: service_healthy) gates the bot's start on this probe.
+    healthcheck:
+      test: ["CMD", "node", "-e", "const n=require('net'),s=n.connect(8191,'127.0.0.1'),t=setTimeout(()=>process.exit(1),3000);s.on('connect',()=>{clearTimeout(t);process.exit(0)});s.on('error',()=>{clearTimeout(t);process.exit(1)};"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
     logging:
       driver: "json-file"
       options:

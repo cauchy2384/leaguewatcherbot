@@ -91,11 +91,30 @@ func (w *Watcher) Run(ctx context.Context) (chan leaguewatcher.Match, chan struc
 	players := w.configMgr.GetPlayers()
 	ch := make(chan leaguewatcher.Match, len(players))
 
-	if err := w.api.Sync(ctx); err != nil {
-		w.logger.Error("failed to sync", "error", err)
-		close(ch)
-		close(done)
-		return ch, done
+	// Retry the initial sync — FlareSolverr may still be starting up
+	// (connection refused). Keep the channel open and retry with a delay
+	// instead of bailing out.
+	const maxSyncAttempts = 5
+	syncAttempts := 0
+	for {
+		if err := w.api.Sync(ctx); err != nil {
+			syncAttempts++
+			w.logger.Error("failed to sync, retrying", "attempt", syncAttempts, "error", err)
+			if syncAttempts >= maxSyncAttempts {
+				close(ch)
+				close(done)
+				return ch, done
+			}
+			select {
+			case <-time.After(15 * time.Second):
+			case <-ctx.Done():
+				close(ch)
+				close(done)
+				return ch, done
+			}
+			continue
+		}
+		break
 	}
 
 	ticker := time.NewTicker(w.period)
