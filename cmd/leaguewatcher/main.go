@@ -4,6 +4,8 @@ import (
 	"context"
 	"leaguewatcher/internal/leaguewatcher"
 	"leaguewatcher/internal/leaguewatcher/bot"
+	"leaguewatcher/internal/leaguewatcher/db"
+	"leaguewatcher/internal/leaguewatcher/neonauth"
 	"leaguewatcher/internal/leaguewatcher/watcher"
 	"log/slog"
 	"os"
@@ -11,6 +13,8 @@ import (
 	"path/filepath"
 	"syscall"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func main() {
@@ -55,6 +59,34 @@ func main() {
 	// Get initial config
 	cfg := configMgr.Get()
 	logger.Info("Config loaded from Doppler", slog.Any("config", cfg))
+
+	// Connect to Neon PostgreSQL (optional - feature-flagged per ADR-007/008)
+	var pool *pgxpool.Pool
+	databaseURL := cfg.DatabaseURLPooled
+	if databaseURL == "" {
+		databaseURL = cfg.DatabaseURL
+	}
+	if databaseURL == "" {
+		logger.Info("DATABASE_URL not set, running in legacy JSON persistence mode")
+	} else {
+		pool, err = db.Connect(ctx, databaseURL, logger.With("component", "db"))
+		if err != nil {
+			logger.Error("Failed to connect to database", "error", err)
+			return
+		}
+		defer pool.Close()
+	}
+
+	// Neon Auth reachability check (non-fatal per ADR-008)
+	if cfg.NeonAuthBaseURL != "" {
+		if err := neonauth.CheckReachable(ctx, cfg.NeonAuthBaseURL); err != nil {
+			logger.Warn("Neon Auth reachability check failed", "error", err)
+		} else {
+			logger.Info("Neon Auth reachable")
+		}
+	} else if databaseURL != "" {
+		logger.Warn("DATABASE_URL is set but NEON_AUTH_BASE_URL is empty; Neon Auth integration disabled")
+	}
 
 	watcher := watcher.New(
 		watcher.Config{
