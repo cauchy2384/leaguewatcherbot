@@ -30,6 +30,11 @@ type Config struct {
 	GeminiSystemPrompt string `yaml:"-"` // GEMINI_SYSTEM_PROMPT
 	GeminiModel        string `yaml:"-"` // GEMINI_MODEL
 
+	// Neon PostgreSQL (from Doppler)
+	DatabaseURL       string `yaml:"-"` // DATABASE_URL (direct endpoint, migrations/tools)
+	DatabaseURLPooled string `yaml:"-"` // DATABASE_URL_POOLED (pooled endpoint, runtime traffic)
+	NeonAuthBaseURL   string `yaml:"-"` // NEON_AUTH_BASE_URL
+
 	// Vertex AI parameters (from Doppler)
 	GeminiTemperature     float32 `yaml:"-"` // GEMINI_TEMPERATURE
 	GeminiTopP            float32 `yaml:"-"` // GEMINI_TOP_P
@@ -95,6 +100,8 @@ func (cfg Config) LogValue() slog.Value {
 		slog.String("gcp_location", cfg.GCPLocation),
 		slog.String("gcp_sa", "***REDACTED***"),
 		slog.String("gemini_model", cfg.GeminiModel),
+		slog.Bool("database_configured", cfg.DatabaseURL != "" || cfg.DatabaseURLPooled != ""),
+		slog.Bool("neon_auth_configured", cfg.NeonAuthBaseURL != ""),
 		slog.Float64("gemini_temperature", float64(cfg.GeminiTemperature)),
 		slog.Float64("gemini_top_p", float64(cfg.GeminiTopP)),
 		slog.Int("gemini_top_k", int(cfg.GeminiTopK)),
@@ -235,6 +242,19 @@ func (cm *ConfigManager) Reload(ctx context.Context) error {
 
 	if gcpSASecret, ok := secrets["GCP_SA"]; ok && gcpSASecret.Computed != nil {
 		newConfig.GCPSA = *gcpSASecret.Computed
+	}
+
+	// Parse Neon PostgreSQL configuration (optional - enables DB-backed repositories)
+	if databaseURLSecret, ok := secrets["DATABASE_URL"]; ok && databaseURLSecret.Computed != nil {
+		newConfig.DatabaseURL = *databaseURLSecret.Computed
+	}
+
+	if databaseURLPooledSecret, ok := secrets["DATABASE_URL_POOLED"]; ok && databaseURLPooledSecret.Computed != nil {
+		newConfig.DatabaseURLPooled = *databaseURLPooledSecret.Computed
+	}
+
+	if neonAuthBaseURLSecret, ok := secrets["NEON_AUTH_BASE_URL"]; ok && neonAuthBaseURLSecret.Computed != nil {
+		newConfig.NeonAuthBaseURL = *neonAuthBaseURLSecret.Computed
 	}
 
 	// Parse gemini_system_prompt

@@ -6,6 +6,7 @@ require (
 	cloud.google.com/go/vertexai v0.19.0
 	github.com/bwmarrin/discordgo v0.29.0
 	github.com/hasura/go-graphql-client v0.16.0
+	github.com/jackc/pgx/v5 v5.11.0
 	github.com/kyokomi/emoji/v2 v2.2.13
 	github.com/matryer/is v1.4.1
 	github.com/nikoksr/doppler-go v0.3.0
@@ -40,6 +41,9 @@ require (
 	github.com/googleapis/enterprise-certificate-proxy v0.3.15 // indirect
 	github.com/googleapis/gax-go/v2 v2.22.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
+	github.com/jackc/pgpassfile v1.0.0 // indirect
+	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
+	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect

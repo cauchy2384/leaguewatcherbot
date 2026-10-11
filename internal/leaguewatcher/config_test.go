@@ -149,6 +149,74 @@ func TestConfigManager_Reload_Success(t *testing.T) {
 	is.Equal(cfg.GeminiThinkingBudget, int32(300))
 }
 
+func TestConfigManager_Reload_NeonSecrets(t *testing.T) {
+	t.Parallel()
+
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+		Level: slog.LevelError,
+	}))
+
+	t.Run("secrets present", func(t *testing.T) {
+		t.Parallel()
+		is := is.New(t)
+
+		secrets := createTestSecrets()
+		secrets["DATABASE_URL"] = &doppler.SecretValue{Computed: stringPtr("postgres://user:secret@host.neon.tech/db?sslmode=require")}
+		secrets["DATABASE_URL_POOLED"] = &doppler.SecretValue{Computed: stringPtr("postgres://user:secret@pooler.neon.tech/db?sslmode=require")}
+		secrets["NEON_AUTH_BASE_URL"] = &doppler.SecretValue{Computed: stringPtr("https://auth.example.neon.tech")}
+
+		cm := newConfigManagerWithProvider("test-token", logger, newFakeSecretProvider(secrets))
+		is.NoErr(cm.Reload(context.Background()))
+
+		cfg := cm.Get()
+		is.Equal(cfg.DatabaseURL, "postgres://user:secret@host.neon.tech/db?sslmode=require")
+		is.Equal(cfg.DatabaseURLPooled, "postgres://user:secret@pooler.neon.tech/db?sslmode=require")
+		is.Equal(cfg.NeonAuthBaseURL, "https://auth.example.neon.tech")
+	})
+
+	t.Run("secrets absent", func(t *testing.T) {
+		t.Parallel()
+		is := is.New(t)
+
+		cm := newConfigManagerWithProvider("test-token", logger, newFakeSecretProvider(createTestSecrets()))
+		is.NoErr(cm.Reload(context.Background()))
+
+		cfg := cm.Get()
+		is.Equal(cfg.DatabaseURL, "")
+		is.Equal(cfg.DatabaseURLPooled, "")
+		is.Equal(cfg.NeonAuthBaseURL, "")
+	})
+}
+
+func TestConfigManager_LogValueRedactsNeonSecrets(t *testing.T) {
+	t.Parallel()
+	is := is.New(t)
+
+	cfg := Config{
+		PollPeriod:        2 * time.Minute,
+		PlayedGap:         30 * time.Minute,
+		ChannelID:         "123456789",
+		DiscordToken:      "token",
+		OwnerID:           "owner",
+		Players:           []Player{},
+		DatabaseURL:       "postgres://user:db-secret-pass@host.neon.tech/db",
+		DatabaseURLPooled: "postgres://user:db-secret-pass@pooler.neon.tech/db",
+		NeonAuthBaseURL:   "https://auth-secret.example.neon.tech",
+	}
+
+	logStr := cfg.LogValue().String()
+
+	// Connection strings and auth URL must never appear in logs
+	is.True(!strings.Contains(logStr, "db-secret-pass"))
+	is.True(!strings.Contains(logStr, "host.neon.tech"))
+	is.True(!strings.Contains(logStr, "pooler.neon.tech"))
+	is.True(!strings.Contains(logStr, "auth-secret.example.neon.tech"))
+
+	// Only boolean configured-flags should be present
+	is.True(strings.Contains(logStr, "database_configured"))
+	is.True(strings.Contains(logStr, "neon_auth_configured"))
+}
+
 func TestConfigManager_Reload_GeminiParams(t *testing.T) {
 	t.Parallel()
 	is := is.New(t)
