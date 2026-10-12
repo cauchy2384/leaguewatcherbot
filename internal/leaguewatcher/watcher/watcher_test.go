@@ -3,6 +3,7 @@ package watcher
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"testing"
@@ -74,5 +75,38 @@ func TestWatcher(t *testing.T) {
 	for _, m := range matches {
 		s := fmt.Sprintf("[%s] %s %s - %d/%d/%d", m.Queue, m.Champion.Name, m.Role, m.Kills, m.Deaths, m.Assists)
 		fmt.Println(s)
+	}
+}
+
+func TestErrorGate_ReportsOnlyAt30(t *testing.T) {
+	is := is.New(t)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	w := New(Config{Period: time.Minute}, nil, logger)
+	key := "euw/Omensielvo"
+
+	for i := 0; i < 29; i++ {
+		is.True(!w.shouldReportError(key))
+	}
+	is.True(w.shouldReportError(key))
+	is.True(!w.shouldReportError(key))
+}
+
+func TestErrorGate_OKResetsCounter(t *testing.T) {
+	is := is.New(t)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	w := New(Config{Period: time.Minute}, nil, logger)
+	key := "euw/Omensielvo"
+
+	for i := 0; i < 10; i++ {
+		is.True(!w.shouldReportError(key))
+	}
+	w.reportOK(key)
+	for i := 1; i <= 30; i++ {
+		reported := w.shouldReportError(key)
+		if i == 30 {
+			is.True(reported)
+		} else {
+			is.True(!reported)
+		}
 	}
 }

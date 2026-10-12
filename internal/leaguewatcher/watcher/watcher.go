@@ -23,10 +23,9 @@ type Watcher struct {
 	api   *mobalytics.Client
 	store *repository.Match
 
-	// errMu protects errState.
-	// key: "region/name/tag", value: last known state (ok or error)
-	errMu    sync.RWMutex
-	errState map[string]string // "ok" or "error"
+	errMu         sync.RWMutex
+	failCount     map[string]int
+	errorReported map[string]bool
 }
 
 // ConfigProvider provides access to the current configuration
@@ -34,6 +33,8 @@ type ConfigProvider interface {
 	GetPlayers() []leaguewatcher.Player
 	Get() leaguewatcher.Config
 }
+
+const maxConsecutiveFailures = 30
 
 type Config struct {
 	Period    time.Duration
@@ -51,13 +52,14 @@ func New(cfg Config, configMgr ConfigProvider, logger *slog.Logger) *Watcher {
 	}
 
 	return &Watcher{
-		period:    cfg.Period,
-		playedGap: cfg.PlayedGap,
-		configMgr: configMgr,
-		logger:    logger,
-		api:       mobalytics.NewClient(logger.With("component", "api"), flaresolverr.NewClient(logger.With("component", "flare"))),
-		store:     repository.NewMatch(),
-		errState:  make(map[string]string),
+		period:        cfg.Period,
+		playedGap:     cfg.PlayedGap,
+		configMgr:     configMgr,
+		logger:        logger,
+		api:           mobalytics.NewClient(logger.With("component", "api"), flaresolverr.NewClient(logger.With("component", "flare"))),
+		store:         repository.NewMatch(),
+		failCount:     make(map[string]int),
+		errorReported: make(map[string]bool),
 	}
 }
 
@@ -68,13 +70,14 @@ func (w *Watcher) shouldReportError(playerKey string) bool {
 	w.errMu.Lock()
 	defer w.errMu.Unlock()
 
-	last := w.errState[playerKey]
-	if last == "error" {
-		// Already reported this error, keep quiet
+	w.failCount[playerKey]++
+	if w.failCount[playerKey] < maxConsecutiveFailures {
 		return false
 	}
-	// First error or recovery — report it
-	w.errState[playerKey] = "error"
+	if w.errorReported[playerKey] {
+		return false
+	}
+	w.errorReported[playerKey] = true
 	return true
 }
 
@@ -83,7 +86,8 @@ func (w *Watcher) shouldReportError(playerKey string) bool {
 func (w *Watcher) reportOK(playerKey string) {
 	w.errMu.Lock()
 	defer w.errMu.Unlock()
-	w.errState[playerKey] = "ok"
+	w.failCount[playerKey] = 0
+	w.errorReported[playerKey] = false
 }
 
 func (w *Watcher) Run(ctx context.Context) (chan leaguewatcher.Match, chan struct{}) {
