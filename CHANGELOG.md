@@ -1,3 +1,10 @@
+## [1.6.2](https://github.com/cauchy2384/leaguewatcherbot/compare/v1.6.1...v1.6.2) (2026-10-12)
+
+
+### Bug Fixes
+
+* better chat error message: 30 min consecutive denials to trigger ([ca2b02d](https://github.com/cauchy2384/leaguewatcherbot/commit/ca2b02d244a71ddec5d02b4168be9eb5d3bd66ff))
+
 ## [1.6.1](https://github.com/cauchy2384/leaguewatcherbot/compare/v1.6.0...v1.6.1) (2026-09-29)
 
 
