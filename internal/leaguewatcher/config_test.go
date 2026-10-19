@@ -157,6 +157,9 @@ func TestConfigManager_Reload_Success(t *testing.T) {
 	is.Equal(cfg.TavilyTimeoutSeconds, 5)
 	is.Equal(cfg.TavilyIncludeDomains, "")
 	is.Equal(cfg.TavilyExcludeDomains, "")
+
+	// Verify outer ask budget default
+	is.Equal(cfg.AskTimeoutSeconds, 15)
 }
 
 func TestConfigManager_Reload_TofaParams(t *testing.T) {
@@ -209,6 +212,7 @@ func TestConfigManager_Reload_TavilyParams(t *testing.T) {
 	secrets["TAVILY_TIMEOUT_SECONDS"] = &doppler.SecretValue{Computed: stringPtr("8")}
 	secrets["TAVILY_INCLUDE_DOMAINS"] = &doppler.SecretValue{Computed: stringPtr("a.com,b.org")}
 	secrets["TAVILY_EXCLUDE_DOMAINS"] = &doppler.SecretValue{Computed: stringPtr("spam.example")}
+	secrets["ASK_TIMEOUT_SECONDS"] = &doppler.SecretValue{Computed: stringPtr("30")}
 
 	fakeProvider := newFakeSecretProvider(secrets)
 	cm := newConfigManagerWithProvider("test-token", logger, fakeProvider)
@@ -225,6 +229,7 @@ func TestConfigManager_Reload_TavilyParams(t *testing.T) {
 	is.Equal(cfg.TavilyTimeoutSeconds, 8)
 	is.Equal(cfg.TavilyIncludeDomains, "a.com,b.org")
 	is.Equal(cfg.TavilyExcludeDomains, "spam.example")
+	is.Equal(cfg.AskTimeoutSeconds, 30)
 }
 
 func TestConfigManager_Reload_MissingRequiredSecret(t *testing.T) {

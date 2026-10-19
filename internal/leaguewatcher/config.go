@@ -45,6 +45,10 @@ type Config struct {
 	TavilyTimeoutSeconds int    `yaml:"-"` // TAVILY_TIMEOUT_SECONDS
 	TavilyIncludeDomains string `yaml:"-"` // TAVILY_INCLUDE_DOMAINS (CSV)
 	TavilyExcludeDomains string `yaml:"-"` // TAVILY_EXCLUDE_DOMAINS (CSV)
+
+	// Outer ask budget. Covers the optional Tavily search step and the
+	// LLM call together. Default 15s matches the historical hardcoded value.
+	AskTimeoutSeconds int `yaml:"-"` // ASK_TIMEOUT_SECONDS
 }
 
 func (cfg Config) IsValid() error {
@@ -114,6 +118,7 @@ func (cfg Config) LogValue() slog.Value {
 		slog.Int("tavily_timeout_seconds", cfg.TavilyTimeoutSeconds),
 		slog.String("tavily_include_domains", cfg.TavilyIncludeDomains),
 		slog.String("tavily_exclude_domains", cfg.TavilyExcludeDomains),
+		slog.Int("ask_timeout_seconds", cfg.AskTimeoutSeconds),
 	)
 }
 
@@ -331,6 +336,15 @@ func (cm *ConfigManager) Reload(ctx context.Context) error {
 	}
 	if tavilyExcludeSecret, ok := secrets["TAVILY_EXCLUDE_DOMAINS"]; ok && tavilyExcludeSecret.Computed != nil {
 		newConfig.TavilyExcludeDomains = *tavilyExcludeSecret.Computed
+	}
+
+	// Parse outer ask budget (covers search + LLM together).
+	newConfig.AskTimeoutSeconds = 15
+	if askTimeoutSecret, ok := secrets["ASK_TIMEOUT_SECONDS"]; ok && askTimeoutSecret.Computed != nil {
+		at, err := strconv.Atoi(*askTimeoutSecret.Computed)
+		if err == nil && at > 0 {
+			newConfig.AskTimeoutSeconds = at
+		}
 	}
 
 	// Validate the new config

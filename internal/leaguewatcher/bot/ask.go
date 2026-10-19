@@ -149,9 +149,10 @@ func (b *Bot) ask(ctx context.Context, s *discordgo.Session, m *discordgo.Messag
 	// Get config (hot-reload via ConfigManager)
 	cfg := b.configMgr.Get()
 
-	// Set timeout. The 15s outer budget covers both the optional search
-	// step and the LLM call below.
-	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	// Set timeout. The outer budget covers both the optional search
+	// step and the LLM call below. Configurable via ASK_TIMEOUT_SECONDS;
+	// 15s matches the historical hardcoded value.
+	ctx, cancel := context.WithTimeout(ctx, time.Duration(cfg.AskTimeoutSeconds)*time.Second)
 	defer cancel()
 
 	// Optional search-grounding step: never fatal. Errors are logged and
