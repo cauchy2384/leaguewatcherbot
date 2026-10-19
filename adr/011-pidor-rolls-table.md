@@ -227,6 +227,15 @@ Date: 2026-10-19
 ## Changelog
 
 - 2026-10-19: Accepted. Schema reviewed and applied to production.
+- 2026-10-19: Backfill tool shipped as `tools/pidors-backfill`.
+  Reads `pidors.json`, computes deterministic synthetic dates per
+  user (ADR-011 §"Backfill strategy"), executes inside a single
+  transaction with `ON CONFLICT DO NOTHING` for idempotency.
+  **`Pidor.Called` is intentionally not imported** — the relational
+  model cannot honestly represent "a roll happened but we don't
+  know who won", and the operator accepted the documented consequence
+  that any channel whose roll already happened today will allow one
+  extra roll on cutover day. See `PLAN-pidors-backfill-tool.md` §5.
 
 ## References
 
