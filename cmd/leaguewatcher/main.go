@@ -60,7 +60,7 @@ func main() {
 	cfg := configMgr.Get()
 	logger.Info("Config loaded from Doppler", slog.Any("config", cfg))
 
-	// Connect to Neon PostgreSQL (optional - feature-flagged per ADR-007/008)
+	// Connect to Neon PostgreSQL (optional - feature-flagged per ADR-007/009)
 	var pool *pgxpool.Pool
 	databaseURL := cfg.DatabaseURLPooled
 	if databaseURL == "" {
@@ -77,7 +77,7 @@ func main() {
 		defer pool.Close()
 	}
 
-	// Neon Auth reachability check (non-fatal per ADR-008)
+	// Neon Auth reachability check (non-fatal per ADR-009)
 	if cfg.NeonAuthBaseURL != "" {
 		if err := neonauth.CheckReachable(ctx, cfg.NeonAuthBaseURL); err != nil {
 			logger.Warn("Neon Auth reachability check failed", "error", err)

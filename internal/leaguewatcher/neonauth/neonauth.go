@@ -2,7 +2,7 @@
 // service (Better Auth-based managed auth). Neon Auth is a TypeScript-only
 // framework and cannot be embedded in this Go service; this package only
 // verifies the service is reachable at startup. Full auth flows are deferred
-// until a consumer exists (see ADR-008).
+// until a consumer exists (see ADR-009).
 package neonauth
 
 import (
@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-// checkTimeout bounds the reachability check (per ADR-008).
+// checkTimeout bounds the reachability check (per ADR-009).
 const checkTimeout = 5 * time.Second
 
 // wellKnownPath is the Better Auth well-known health endpoint.
