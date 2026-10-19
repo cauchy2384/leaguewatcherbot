@@ -293,6 +293,11 @@ go test -run TestMatchURL ./...         # Specific test by name
 - **Access**: Only via `bot/repository/log.go` methods
 - **WARNING**: Manual edits compromise audit trail
 
+**`internal/leaguewatcher/db/migrations/*.sql`** - Database schema migrations
+- **Access**: Applied by `tools/migrator`; tracked in the `schema_migrations` table
+- **CRITICAL**: Never edit a migration file once it has been merged to `main`. Post-merge changes break production databases that already applied the original. Always add a new migration to change the schema.
+- **WARNING**: Parallel branches adding migrations will conflict on the next version number; resolve at rebase time by renumbering.
+
 ### Environment Variables (Required)
 
 ```bash
@@ -572,6 +577,8 @@ git push origin feature-branch
 | **Lint code** | `go vet ./...` |
 | **Add Discord command** | Create in `bot/`, register in `bot.go:cmd()` |
 | **Add API query** | Add to `mobalytics/client.go` |
+| **Add schema migration** | New `NNNN_name.{up,down}.sql` in `internal/leaguewatcher/db/migrations/` (see ADR-010) |
+| **Apply migrations** | `doppler run -- go run tools/migrator/main.go up` |
 | **Test pattern** | Table-driven with `t.Run()` + `t.Parallel()` |
 | **Config file** | `config.yaml` in executable directory |
 | **Data files** | `pidors.json`, `log.json` (auto-generated) |
