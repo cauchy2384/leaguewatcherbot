@@ -1,3 +1,10 @@
+# [1.12.0](https://github.com/cauchy2384/leaguewatcherbot/compare/v1.11.0...v1.12.0) (2026-10-19)
+
+
+### Features
+
+* add pidors-backfill tool to import JSON stats into pidor_rolls ([#27](https://github.com/cauchy2384/leaguewatcherbot/issues/27)) ([c1eac8b](https://github.com/cauchy2384/leaguewatcherbot/commit/c1eac8b7caa61eb6204e1fa3f8c9f38c6f22be75))
+
 # [1.11.0](https://github.com/cauchy2384/leaguewatcherbot/compare/v1.10.0...v1.11.0) (2026-10-19)
 
 
