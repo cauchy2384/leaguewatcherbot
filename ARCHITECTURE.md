@@ -239,6 +239,26 @@ External Systems:
 - Match IDs of recently processed matches
 - Cleared on application restart
 
+### 4.4 pidor_rolls (Neon Postgres)
+**Type**: Relational table (persistent, future canonical store)
+
+**Purpose**: Durable roll-event history and aggregate store for the pidor game, replacing `pidors.json` in a follow-up release
+
+**Schema** (see `internal/leaguewatcher/db/migrations/0002_pidor_rolls.up.sql`):
+- `id` BIGSERIAL PK
+- `channel_id`, `user_id`, `user_name` TEXT (Discord snowflakes as strings; username is a snapshot at roll time)
+- `rolled_on` DATE — canonical pidor day, computed by the application in `Europe/Moscow`
+- `rolled_at` TIMESTAMPTZ — audit insert timestamp
+- `times_rolled` INTEGER ≥ 1 — 1 for live rolls, N for backfilled aggregates
+
+**Constraint**: `UNIQUE (channel_id, rolled_on)` — at most one winner per channel per day enforced at the storage layer (defence-in-depth against double-roll races).
+
+**Status**: Schema landed (migration 0002, ADR-011). Bot code 
+**does not yet read or write** this table — the consumer PR is
+tracked separately. See `adr/011-pidor-rolls-table.md` for the
+backfill strategy (deterministic synthetic dates per user within
+each channel).
+
 ---
 
 ## 5. External Integrations/APIs
