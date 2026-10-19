@@ -2,6 +2,7 @@ package bot
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"leaguewatcher/internal/leaguewatcher"
 	"time"
@@ -11,11 +12,16 @@ import (
 	"google.golang.org/api/option"
 )
 
+// ErrLLMNotConfigured is returned when the LLM provider is missing required
+// configuration (API key, model, etc.). The caller maps it to a user-facing
+// message instead of treating it as a transient failure.
+var ErrLLMNotConfigured = errors.New("llm not configured")
+
 // generateWithVertexAI calls Vertex AI with the given configuration and query
 func generateWithVertexAI(ctx context.Context, cfg leaguewatcher.Config, query string) (string, error) {
 	// Validate required fields
 	if cfg.GCPSA == "" || cfg.GCPProjectID == "" {
-		return "", fmt.Errorf("vertex ai not configured")
+		return "", ErrLLMNotConfigured
 	}
 
 	// Create Vertex AI client
@@ -80,9 +86,9 @@ func (b *Bot) ask(ctx context.Context, s *discordgo.Session, m *discordgo.Messag
 	// Call Vertex AI
 	answer, err := generateWithVertexAI(ctx, cfg, query)
 	if err != nil {
-		if err.Error() == "vertex ai not configured" {
+		if errors.Is(err, ErrLLMNotConfigured) {
 			s.ChannelMessageSendReply(m.ChannelID, "Я не настроен для этого, извини!", m.Reference())
-			b.logger.Error("vertex ai not configured")
+			b.logger.Error("llm not configured")
 		} else {
 			s.ChannelMessageSendReply(m.ChannelID, "У меня проблемы со связью с оракулом.", m.Reference())
 			b.logger.Error("failed to call vertex ai",
