@@ -1,3 +1,10 @@
+# [1.8.0](https://github.com/cauchy2384/leaguewatcherbot/compare/v1.7.0...v1.8.0) (2026-10-19)
+
+
+### Features
+
+* ground !ask answers with Tavily Search ([#22](https://github.com/cauchy2384/leaguewatcherbot/issues/22)) ([39d7713](https://github.com/cauchy2384/leaguewatcherbot/commit/39d77134a14fc99057ec38cac17155b419dc5c03))
+
 # [1.7.0](https://github.com/cauchy2384/leaguewatcherbot/compare/v1.6.2...v1.7.0) (2026-10-19)
 
 
