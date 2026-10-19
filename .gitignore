@@ -28,4 +28,5 @@ go.work.sum
 Makefile
 pidors.json
 leaguewatcherbot
-migrator
+/migrator
+/tools/migrator/migrator
