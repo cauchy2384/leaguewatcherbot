@@ -6,7 +6,7 @@
 
 ## Context
 
-ADR 007 (branch `adr/007-pidors-relational-db-migration`) selected **PostgreSQL on Neon free tier** as the future persistence layer for pidor game state. Before any repository migration can begin, the bot needs a reliable, feature-flagged way to open and verify a database connection at startup.
+**PostgreSQL on Neon free tier** has been selected as the future persistence layer for pidor game state (full migration ADR pending). Before any repository migration can begin, the bot needs a reliable, feature-flagged way to open and verify a database connection at startup.
 
 The Neon project is already provisioned and the following secrets exist in Doppler (`leaguewatcherbot` / `prd`):
 
@@ -21,8 +21,8 @@ A skeleton `internal/leaguewatcher/db/db.go` (untracked) already contains a `Con
 ### Requirements
 
 1. **Connect on startup**: open the pool and verify it with `Ping` before the watcher/bot start.
-2. **Feature-flagged**: empty `DATABASE_URL` keeps the bot running in legacy JSON-file mode (per ADR-007, step 4).
-3. **Fail fast when configured**: invalid or unreachable `DATABASE_URL` must abort startup with a clear error (ADR-007, step 4 exit criteria).
+2. **Feature-flagged**: empty `DATABASE_URL` keeps the bot running in legacy JSON-file mode.
+3. **Fail fast when configured**: invalid or unreachable `DATABASE_URL` must abort startup with a clear error.
 4. **No secrets in logs**: connection strings must never be logged; only pool metadata.
 5. **Graceful shutdown**: pool must be closed during the existing shutdown sequence.
 6. **Neon Auth plumbed, not consumed**: `NEON_AUTH_BASE_URL` must be loaded and validated, but full auth integration is out of scope (see below).
@@ -39,7 +39,7 @@ Add three secret fields, all `yaml:"-"`, loaded exclusively from Doppler:
 | `DatabaseURLPooled` | `DATABASE_URL_POOLED` | optional | Pooled endpoint; preferred for runtime traffic |
 | `NeonAuthBaseURL` | `NEON_AUTH_BASE_URL` | optional | Base URL of the Neon Auth (Better Auth-based) service |
 
-- All three are **optional**: empty `DATABASE_URL_POOLED`/`DATABASE_URL` keeps the bot in legacy JSON-file mode (ADR-007 feature flag).
+- All three are **optional**: empty `DATABASE_URL_POOLED`/`DATABASE_URL` keeps the bot in legacy JSON-file mode.
 - `IsValid()` stays unchanged — DB remains optional until the pidor migration cutover.
 - `LogValue` must redact all three values.
 
@@ -56,9 +56,9 @@ A skeleton `Connect(ctx, url, logger) (*pgxpool.Pool, error)` already exists on 
 
 After the initial `configMgr.Reload(ctx)` and before `watcher.Run`:
 
-1. If `DATABASE_URL_POOLED` (falling back to `DATABASE_URL`) is **empty** → log "database disabled, using JSON persistence" and continue (legacy mode, per ADR-007 feature flag).
+1. If `DATABASE_URL_POOLED` (falling back to `DATABASE_URL`) is **empty** → log "database disabled, using JSON persistence" and continue (legacy mode).
 2. If set → `db.Connect(ctx, url, logger)` (connect + `Ping`, 15 s timeout).
-   - Failure → log error and **exit** (fail fast per ADR-007 step 4: invalid URL = clear startup failure).
+   - Failure → log error and **exit** (invalid URL must surface as a clear startup failure, not a runtime surprise).
 3. On shutdown: `pool.Close()` after `watcherDone`/`botDone` drain.
 
 ### 4. Neon Auth scope (`NEON_AUTH_BASE_URL`)
@@ -96,7 +96,7 @@ In `main.go` shutdown sequence, after `watcherDone`/`botDone` drain: `pool.Close
 ## Consequences
 
 ### Positive
-- Unblocks ADR-007 steps 1–4 (migrations, Postgres pidor repo).
+- Unblocks the upcoming Postgres pidor migration (schema migrations and a Postgres-backed pidor repository).
 - Fail-fast behavior catches bad credentials at deploy time, not at first `!pidorday`.
 - Pooled vs direct URL split ready for future migration tooling.
 
@@ -106,13 +106,13 @@ In `main.go` shutdown sequence, after `watcherDone`/`botDone` drain: `pool.Close
 
 ### Neutral / Deferred
 - **Better Auth is TypeScript-only.** This Go service cannot embed it; it will interact with Neon Auth over HTTP (session/JWKS verification) only when a real consumer exists. Until then `NEON_AUTH_BASE_URL` is validated but unused beyond a reachability check.
-- No schema/migrations in this task — that remains ADR-007 step 1.
+- No schema/migrations in this task — schema design belongs to the upcoming pidor migration work.
 
 ## References
 
 - `internal/leaguewatcher/config.go` (Doppler `Reload`)
 - `cmd/leaguewatcher/main.go` (startup/shutdown sequence)
-- `adr/007-pidors-relational-db-migration.md` (branch `adr/007-pidors-relational-db-migration`), steps 0 and 4
+- Pending: full pidor-state Postgres migration ADR (settings 0 and 4 in its rollout plan)
 - Neon pooled connections: https://neon.tech/docs/connect/connection-pooling
 - Neon Auth (Better Auth-based): https://neon.tech/docs/auth/overview
 

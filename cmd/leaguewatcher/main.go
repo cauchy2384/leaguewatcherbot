@@ -60,7 +60,7 @@ func main() {
 	cfg := configMgr.Get()
 	logger.Info("Config loaded from Doppler", slog.Any("config", cfg))
 
-	// Connect to Neon PostgreSQL (optional - feature-flagged per ADR-007/009)
+	// Connect to Neon PostgreSQL (optional - feature-flagged per ADR-009)
 	var pool *pgxpool.Pool
 	databaseURL := cfg.DatabaseURLPooled
 	if databaseURL == "" {
