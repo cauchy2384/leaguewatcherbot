@@ -46,6 +46,8 @@ func run(args []string, logger *slog.Logger) int {
 	fs.SetOutput(os.Stderr)
 	jsonPath := fs.String("json", "./pidors.json", "path to pidors.json")
 	dbFlag := fs.String("db", "", "override $DATABASE_URL (ad-hoc use only)")
+	backupName := fs.String("backup-name", "",
+		"override the backup table name (default: pidor_rolls_backup_<UTC timestamp>)")
 	dryRun := fs.Bool("dry-run", false, "compute plan and print it, do not write to DB")
 	verbose := fs.Bool("v", false, "verbose logging (per-row details)")
 	if err := fs.Parse(args); err != nil {
@@ -97,16 +99,23 @@ func run(args []string, logger *slog.Logger) int {
 	}
 	defer pool.Close()
 
-	inserted, skipped, err := applyPlan(ctx, pool, rows)
+	name := *backupName
+	if name == "" {
+		name = defaultBackupName(time.Now())
+	}
+	logger.Info("snapshotting pidor_rolls before truncate", "backup_table", name)
+
+	inserted, truncated, err := applyPlan(ctx, pool, name, rows)
 	if err != nil {
-		logger.Error("backfill failed", "error", err)
+		logger.Error("backfill failed", "error", err, "backup_table", name)
 		return exitApplyError
 	}
 
 	logger.Info("backfill complete",
 		"inserted", inserted,
-		"skipped", skipped,
+		"truncated", truncated,
 		"total_planned", len(rows),
+		"backup_table", name,
 	)
 	return exitOK
 }

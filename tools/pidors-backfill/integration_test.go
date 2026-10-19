@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"leaguewatcher/internal/leaguewatcher/bot/repository"
 	"leaguewatcher/internal/leaguewatcher/db"
 	"log/slog"
@@ -15,21 +16,28 @@ import (
 // with the migrator's integration test — both are "connect to a real
 // dev Neon database" use cases).
 //
+// The test exercises the full destructive-but-safe flow:
+//  1. Pre-populate pidor_rolls with control rows, simulating prior state
+//  2. Run applyPlan with new rows
+//  3. Verify the backup table contains the original contents
+//  4. Verify pidor_rolls contains only the new rows
+//  5. Verify a second applyPlan replaces the first (not additive)
+//
 // Run manually:
 //
 //	MIGRATOR_TEST_DSN="postgres://user:pass@host/db?sslmode=require" \
 //	  go test ./tools/pidors-backfill -run TestBackfillIntegration -v
 //
-// The test uses a synthetic channel ID suffixed with "-itest" to
-// distinguish its rows from real production data, and cleans them up
-// before exit.
+// Test rows use a synthetic channel_id suffixed with "-itest" so they
+// are easily distinguishable from production data. The backup tables
+// created during the test are dropped before exit.
 func TestBackfillIntegration(t *testing.T) {
 	dsn := os.Getenv("MIGRATOR_TEST_DSN")
 	if dsn == "" {
 		t.Skip("MIGRATOR_TEST_DSN not set, skipping integration test")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
@@ -37,33 +45,54 @@ func TestBackfillIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	// Defers run LIFO: pool.Close is registered FIRST so it executes LAST,
+	// Defers run LIFO: pool.Close registered FIRST so it executes LAST,
 	// after the data cleanup registered below.
 	defer pool.Close()
 
 	channelID := "integration-test-channel"
-	userIDs := []string{"itu-alice", "itu-bob", "itu-carol"}
+	backup1 := fmt.Sprintf("pidor_rolls_itest_backup_a_%d", time.Now().UnixNano())
+	backup2 := fmt.Sprintf("pidor_rolls_itest_backup_b_%d", time.Now().UnixNano())
 
-	// Ensure clean slate for this test's channel.
-	if _, err := pool.Exec(ctx,
-		"DELETE FROM pidor_rolls WHERE channel_id=$1", channelID); err != nil {
-		t.Fatalf("pre-test cleanup: %v", err)
-	}
-	defer func() {
-		cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		if _, err := pool.Exec(cleanupCtx,
-			"DELETE FROM pidor_rolls WHERE channel_id=$1", channelID); err != nil {
-			t.Logf("post-test cleanup failed: %v", err)
+	// Pre-test cleanup: kill any leftovers from previous runs of this test,
+	// including earlier backups.
+	mustExec := func(q string, args ...interface{}) {
+		if _, err := pool.Exec(ctx, q, args...); err != nil {
+			t.Fatalf("sql %q: %v", q, err)
 		}
+	}
+	mustExec("DELETE FROM pidor_rolls WHERE channel_id=$1", channelID)
+	mustExec(fmt.Sprintf("DROP TABLE IF EXISTS %s", backup1))
+	mustExec(fmt.Sprintf("DROP TABLE IF EXISTS %s", backup2))
+
+	// Post-test cleanup. Defers need ctx-independent cleanup.
+	defer func() {
+		cctx, ccancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer ccancel()
+		_, _ = pool.Exec(cctx, fmt.Sprintf("DROP TABLE IF EXISTS %s", backup1))
+		_, _ = pool.Exec(cctx, fmt.Sprintf("DROP TABLE IF EXISTS %s", backup2))
+		_, _ = pool.Exec(cctx, "DELETE FROM pidor_rolls WHERE channel_id=$1", channelID)
 	}()
 
+	// === Stage 1: seed pidor_rolls with "previous state" rows. ===
+	prior := []planRow{
+		{ChannelID: channelID, UserID: "itu-prior-1", UserName: "OldA",
+			RolledOn: mustDate("1970-01-01"), TimesRolled: 9},
+		{ChannelID: channelID, UserID: "itu-prior-2", UserName: "OldB",
+			RolledOn: mustDate("1970-01-02"), TimesRolled: 4},
+	}
+	for _, r := range prior {
+		mustExec(`INSERT INTO pidor_rolls (channel_id, user_id, user_name, rolled_on, times_rolled)
+		          VALUES ($1, $2, $3, $4, $5)`,
+			r.ChannelID, r.UserID, r.UserName, r.RolledOn, r.TimesRolled)
+	}
+
+	// === Stage 2: apply backfill plan. Backup should capture the prior rows. ===
 	p := &repository.Pidor{
 		Stats: map[string]map[string]repository.PidorStat{
 			channelID: {
-				userIDs[0]: {Name: "Alice", Count: 4},
-				userIDs[1]: {Name: "Bob", Count: 2},
-				userIDs[2]: {Name: "Carol", Count: 6},
+				"itu-alice": {Name: "Alice", Count: 4},
+				"itu-bob":   {Name: "Bob", Count: 2},
+				"itu-carol": {Name: "Carol", Count: 6},
 			},
 		},
 	}
@@ -75,25 +104,39 @@ func TestBackfillIntegration(t *testing.T) {
 		t.Fatalf("expected 3 rows, got %d", len(rows))
 	}
 
-	// First apply: everything inserts.
-	inserted, skipped, err := applyPlan(ctx, pool, rows)
+	inserted, truncated, err := applyPlan(ctx, pool, backup1, rows)
 	if err != nil {
-		t.Fatalf("first apply: %v", err)
+		t.Fatalf("apply plan: %v", err)
 	}
-	if inserted != 3 || skipped != 0 {
-		t.Fatalf("first apply: inserted=%d skipped=%d, want 3/0", inserted, skipped)
+	if inserted != 3 {
+		t.Errorf("inserted=%d, want 3", inserted)
+	}
+	if truncated != 2 {
+		t.Errorf("truncated=%d, want 2 (the seeded prior rows)", truncated)
 	}
 
-	// Second apply: idempotent skip.
-	inserted, skipped, err = applyPlan(ctx, pool, rows)
-	if err != nil {
-		t.Fatalf("second apply: %v", err)
+	// Backup table should hold the two seeded prior rows.
+	var backupCount int
+	if err := pool.QueryRow(ctx, fmt.Sprintf("SELECT count(*) FROM %s", backup1)).
+		Scan(&backupCount); err != nil {
+		t.Fatalf("count backup table: %v", err)
 	}
-	if inserted != 0 || skipped != 3 {
-		t.Fatalf("second apply: inserted=%d skipped=%d, want 0/3", inserted, skipped)
+	if backupCount != 2 {
+		t.Errorf("backup count=%d, want 2", backupCount)
 	}
 
-	// Verify aggregates via the acceptance query from ADR-011.
+	// pidor_rolls should hold the three new rows, no prior rows.
+	var priorsInMain int
+	if err := pool.QueryRow(ctx,
+		`SELECT count(*) FROM pidor_rolls WHERE channel_id=$1 AND user_id LIKE 'itu-prior-%'`,
+		channelID).Scan(&priorsInMain); err != nil {
+		t.Fatalf("count priors in main: %v", err)
+	}
+	if priorsInMain != 0 {
+		t.Errorf("priors still present in main: %d, want 0", priorsInMain)
+	}
+
+	// Aggregates match the JSON.
 	type agg struct {
 		userID string
 		total  int
@@ -104,7 +147,6 @@ func TestBackfillIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("query aggregates: %v", err)
 	}
-	defer rowsQ.Close()
 	var got []agg
 	for rowsQ.Next() {
 		var a agg
@@ -113,10 +155,7 @@ func TestBackfillIntegration(t *testing.T) {
 		}
 		got = append(got, a)
 	}
-	if err := rowsQ.Err(); err != nil {
-		t.Fatalf("rows error: %v", err)
-	}
-
+	rowsQ.Close()
 	want := []agg{
 		{userID: "itu-carol", total: 6},
 		{userID: "itu-alice", total: 4},
@@ -128,6 +167,68 @@ func TestBackfillIntegration(t *testing.T) {
 	for i, w := range want {
 		if got[i] != w {
 			t.Errorf("aggregate row %d: got %+v want %+v", i, got[i], w)
+		}
+	}
+
+	// === Stage 3: re-apply with same plan into a second backup. ===
+	// Expectation: not additive — main has same 3 rows, not 6.
+	inserted, truncated, err = applyPlan(ctx, pool, backup2, rows)
+	if err != nil {
+		t.Fatalf("second apply: %v", err)
+	}
+	if inserted != 3 {
+		t.Errorf("second apply inserted=%d, want 3", inserted)
+	}
+	if truncated != 3 {
+		t.Errorf("second apply truncated=%d, want 3 (the rows from run 1)", truncated)
+	}
+
+	// Second backup captures the first run's output.
+	if err := pool.QueryRow(ctx, fmt.Sprintf("SELECT count(*) FROM %s", backup2)).
+		Scan(&backupCount); err != nil {
+		t.Fatalf("count backup2: %v", err)
+	}
+	if backupCount != 3 {
+		t.Errorf("backup2 count=%d, want 3", backupCount)
+	}
+
+	// Main should still have exactly 3 rows (not 6), proving replace-not-append.
+	var mainCount int
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM pidor_rolls WHERE channel_id=$1",
+		channelID).Scan(&mainCount); err != nil {
+		t.Fatalf("count main: %v", err)
+	}
+	if mainCount != 3 {
+		t.Errorf("main count=%d after re-apply, want 3", mainCount)
+	}
+}
+
+// TestApplyPlanRejectsUnsafeBackupName is a unit test that doesn't
+// need a real DB. Just verify that obviously-bad identifiers are
+// rejected before any SQL runs.
+func TestApplyPlanRejectsUnsafeBackupName(t *testing.T) {
+	t.Parallel()
+	bad := []string{
+		"",
+		"pidor_rolls; DROP TABLE users;--",
+		"\"quoted\"",
+		"pidor rolls",
+		"0startwithdigit",
+		"UPPERCASE",
+	}
+	for _, name := range bad {
+		if safeIdentifierPattern.MatchString(name) {
+			t.Errorf("name %q unexpectedly matched safe pattern", name)
+		}
+	}
+	good := []string{
+		"pidor_rolls_backup_20261019_225600_utc",
+		"a",
+		"pidor_rolls_itest_backup_a_1729872000000000",
+	}
+	for _, name := range good {
+		if !safeIdentifierPattern.MatchString(name) {
+			t.Errorf("name %q unexpectedly rejected by safe pattern", name)
 		}
 	}
 }
