@@ -1,3 +1,10 @@
+# [1.9.0](https://github.com/cauchy2384/leaguewatcherbot/compare/v1.8.0...v1.9.0) (2026-10-19)
+
+
+### Features
+
+* feature-flagged Neon PostgreSQL connection on startup ([#23](https://github.com/cauchy2384/leaguewatcherbot/issues/23)) ([72717c9](https://github.com/cauchy2384/leaguewatcherbot/commit/72717c985f9f87fe4973afe86cd56249bd38b9e4))
+
 # [1.8.0](https://github.com/cauchy2384/leaguewatcherbot/compare/v1.7.0...v1.8.0) (2026-10-19)
 
 
