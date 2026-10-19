@@ -141,15 +141,15 @@ func TestConfigManager_Reload_Success(t *testing.T) {
 	is.Equal(cfg.Players[0].Name, "player1")
 	is.Equal(cfg.Players[1].RealName, "Player Two")
 
-	// Verify Gemini parameter defaults
-	is.Equal(cfg.GeminiTemperature, float32(0.4))
-	is.Equal(cfg.GeminiTopP, float32(0.95))
-	is.Equal(cfg.GeminiTopK, int32(40))
-	is.Equal(cfg.GeminiMaxOutputTokens, int32(2048))
-	is.Equal(cfg.GeminiThinkingBudget, int32(300))
+	// Verify TOFA parameter defaults
+	is.Equal(cfg.TofaModel, "meta-llama/Llama-3.3-70B-Instruct")
+	is.Equal(cfg.TofaBaseURL, "https://api.tokenfactory.nebius.com/v1")
+	is.Equal(cfg.TofaTemperature, float32(0.4))
+	is.Equal(cfg.TofaTopP, float32(0.95))
+	is.Equal(cfg.TofaMaxOutputTokens, int32(2048))
 }
 
-func TestConfigManager_Reload_GeminiParams(t *testing.T) {
+func TestConfigManager_Reload_TofaParams(t *testing.T) {
 	t.Parallel()
 	is := is.New(t)
 
@@ -158,11 +158,13 @@ func TestConfigManager_Reload_GeminiParams(t *testing.T) {
 	}))
 
 	secrets := createTestSecrets()
-	secrets["GEMINI_TEMPERATURE"] = &doppler.SecretValue{Computed: stringPtr("0.7")}
-	secrets["GEMINI_TOP_P"] = &doppler.SecretValue{Computed: stringPtr("0.8")}
-	secrets["GEMINI_TOP_K"] = &doppler.SecretValue{Computed: stringPtr("20")}
-	secrets["GEMINI_MAX_OUTPUT_TOKENS"] = &doppler.SecretValue{Computed: stringPtr("1024")}
-	secrets["GEMINI_THINKING_BUDGET"] = &doppler.SecretValue{Computed: stringPtr("500")}
+	secrets["TOFA_API_KEY"] = &doppler.SecretValue{Computed: stringPtr("tofa-key-xyz")}
+	secrets["TOFA_MODEL"] = &doppler.SecretValue{Computed: stringPtr("deepseek-ai/DeepSeek-V3")}
+	secrets["TOFA_BASE_URL"] = &doppler.SecretValue{Computed: stringPtr("https://tofa.example.com/v1")}
+	secrets["TOFA_SYSTEM_PROMPT"] = &doppler.SecretValue{Computed: stringPtr("Ты — бот.")}
+	secrets["TOFA_TEMPERATURE"] = &doppler.SecretValue{Computed: stringPtr("0.7")}
+	secrets["TOFA_TOP_P"] = &doppler.SecretValue{Computed: stringPtr("0.8")}
+	secrets["TOFA_MAX_OUTPUT_TOKENS"] = &doppler.SecretValue{Computed: stringPtr("1024")}
 
 	fakeProvider := newFakeSecretProvider(secrets)
 	cm := newConfigManagerWithProvider("test-token", logger, fakeProvider)
@@ -171,11 +173,13 @@ func TestConfigManager_Reload_GeminiParams(t *testing.T) {
 	is.NoErr(err)
 
 	cfg := cm.Get()
-	is.Equal(cfg.GeminiTemperature, float32(0.7))
-	is.Equal(cfg.GeminiTopP, float32(0.8))
-	is.Equal(cfg.GeminiTopK, int32(20))
-	is.Equal(cfg.GeminiMaxOutputTokens, int32(1024))
-	is.Equal(cfg.GeminiThinkingBudget, int32(500))
+	is.Equal(cfg.TofaAPIKey, "tofa-key-xyz")
+	is.Equal(cfg.TofaModel, "deepseek-ai/DeepSeek-V3")
+	is.Equal(cfg.TofaBaseURL, "https://tofa.example.com/v1")
+	is.Equal(cfg.TofaSystemPrompt, "Ты — бот.")
+	is.Equal(cfg.TofaTemperature, float32(0.7))
+	is.Equal(cfg.TofaTopP, float32(0.8))
+	is.Equal(cfg.TofaMaxOutputTokens, int32(1024))
 }
 
 func TestConfigManager_Reload_MissingRequiredSecret(t *testing.T) {
@@ -309,6 +313,8 @@ func TestConfigManager_LogValueRedactsSecrets(t *testing.T) {
 		ChannelID:         "123456789",
 		DiscordToken:      "secret-token-should-not-appear",
 		OwnerID:           "owner-should-not-appear",
+		TofaAPIKey:        "tofa-key-should-not-appear",
+		TofaModel:         "meta-llama/Llama-3.3-70B-Instruct",
 		Players:           []Player{},
 		KhaleesiThreshold: nil,
 	}
@@ -319,6 +325,7 @@ func TestConfigManager_LogValueRedactsSecrets(t *testing.T) {
 	// Secrets should be redacted
 	is.True(!strings.Contains(logStr, "secret-token-should-not-appear"))
 	is.True(!strings.Contains(logStr, "owner-should-not-appear"))
+	is.True(!strings.Contains(logStr, "tofa-key-should-not-appear"))
 	is.True(strings.Contains(logStr, "REDACTED"))
 
 	// Non-secrets should be present

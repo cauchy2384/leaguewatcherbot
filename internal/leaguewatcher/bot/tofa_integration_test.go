@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-func TestVertexAIIntegration(t *testing.T) {
+func TestTokenFactoryIntegration(t *testing.T) {
 	token := os.Getenv("DOPPLER_TOKEN")
 	if token == "" {
 		t.Skip("DOPPLER_TOKEN not set, skipping integration test")
@@ -29,20 +29,20 @@ func TestVertexAIIntegration(t *testing.T) {
 	}
 
 	cfg := cm.Get()
-	if cfg.GCPSA == "" || cfg.GCPProjectID == "" {
-		t.Skip("Vertex AI not configured in Doppler (GCP_SA or GCP_PROJECT_ID missing), skipping integration test")
+	if cfg.TofaAPIKey == "" || cfg.TofaModel == "" {
+		t.Skip("Token Factory not configured in Doppler (TOFA_API_KEY or TOFA_MODEL missing), skipping integration test")
 	}
 
 	// Test with Russian query using shared helper
 	query := "Сколько боссов в бвл?"
-	answer, err := generateWithVertexAI(ctx, cfg, query)
+	answer, err := generateWithTokenFactory(ctx, cfg, query)
 	if err != nil {
-		t.Fatalf("failed to call vertex ai: %v", err)
+		t.Fatalf("failed to call token factory: %v", err)
 	}
 
 	if answer == "" {
-		t.Fatal("vertex ai returned an empty answer")
+		t.Fatal("token factory returned an empty answer")
 	}
 
-	t.Logf("Vertex AI response: %s", answer)
+	t.Logf("Token Factory response: %s", answer)
 }

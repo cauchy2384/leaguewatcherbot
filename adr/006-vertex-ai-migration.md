@@ -2,7 +2,9 @@
 
 ## Status
 
-**Proposed** - 2026-05-09
+**Superseded by [ADR-007](007-nebius-token-factory-migration.md)** - 2026-10-19
+
+~~**Proposed** - 2026-05-09~~
 
 ## Context
 
