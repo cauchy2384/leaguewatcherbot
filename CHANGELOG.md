@@ -1,3 +1,10 @@
+# [1.10.0](https://github.com/cauchy2384/leaguewatcherbot/compare/v1.9.0...v1.10.0) (2026-10-19)
+
+
+### Features
+
+* add tools/migrator for SQL schema migrations ([#24](https://github.com/cauchy2384/leaguewatcherbot/issues/24)) ([258f723](https://github.com/cauchy2384/leaguewatcherbot/commit/258f723595eff5b054edb4979cd72ebe0ce353f3))
+
 # [1.9.0](https://github.com/cauchy2384/leaguewatcherbot/compare/v1.8.0...v1.9.0) (2026-10-19)
 
 
