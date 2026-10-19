@@ -22,20 +22,17 @@ type Config struct {
 	KhaleesiThreshold *int     `yaml:"khaleesi_threshold,omitempty"`
 
 	// Secrets from Doppler (never logged)
-	DiscordToken       string `yaml:"-"` // BOT_DISCORD_TOKEN
-	OwnerID            string `yaml:"-"` // BOT_OWNER_ID
-	GCPProjectID       string `yaml:"-"` // GCP_PROJECT_ID
-	GCPLocation        string `yaml:"-"` // GCP_LOCATION
-	GCPSA              string `yaml:"-"` // GCP_SA
-	GeminiSystemPrompt string `yaml:"-"` // GEMINI_SYSTEM_PROMPT
-	GeminiModel        string `yaml:"-"` // GEMINI_MODEL
+	DiscordToken string `yaml:"-"` // BOT_DISCORD_TOKEN
+	OwnerID      string `yaml:"-"` // BOT_OWNER_ID
 
-	// Vertex AI parameters (from Doppler)
-	GeminiTemperature     float32 `yaml:"-"` // GEMINI_TEMPERATURE
-	GeminiTopP            float32 `yaml:"-"` // GEMINI_TOP_P
-	GeminiTopK            int32   `yaml:"-"` // GEMINI_TOP_K
-	GeminiMaxOutputTokens int32   `yaml:"-"` // GEMINI_MAX_OUTPUT_TOKENS
-	GeminiThinkingBudget  int32   `yaml:"-"` // GEMINI_THINKING_BUDGET
+	// Nebius Token Factory configuration (from Doppler)
+	TofaAPIKey          string  `yaml:"-"` // TOFA_API_KEY (secret, never logged)
+	TofaModel           string  `yaml:"-"` // TOFA_MODEL
+	TofaBaseURL         string  `yaml:"-"` // TOFA_BASE_URL
+	TofaSystemPrompt    string  `yaml:"-"` // TOFA_SYSTEM_PROMPT
+	TofaTemperature     float32 `yaml:"-"` // TOFA_TEMPERATURE
+	TofaTopP            float32 `yaml:"-"` // TOFA_TOP_P
+	TofaMaxOutputTokens int32   `yaml:"-"` // TOFA_MAX_OUTPUT_TOKENS
 }
 
 func (cfg Config) IsValid() error {
@@ -91,15 +88,12 @@ func (cfg Config) LogValue() slog.Value {
 		slog.Any("khaleesi_threshold", cfg.KhaleesiThreshold),
 		slog.String("discord_token", "***REDACTED***"),
 		slog.String("owner_id", "***REDACTED***"),
-		slog.String("gcp_project_id", cfg.GCPProjectID),
-		slog.String("gcp_location", cfg.GCPLocation),
-		slog.String("gcp_sa", "***REDACTED***"),
-		slog.String("gemini_model", cfg.GeminiModel),
-		slog.Float64("gemini_temperature", float64(cfg.GeminiTemperature)),
-		slog.Float64("gemini_top_p", float64(cfg.GeminiTopP)),
-		slog.Int("gemini_top_k", int(cfg.GeminiTopK)),
-		slog.Int("gemini_max_output_tokens", int(cfg.GeminiMaxOutputTokens)),
-		slog.Int("gemini_thinking_budget", int(cfg.GeminiThinkingBudget)),
+		slog.String("tofa_api_key", "***REDACTED***"),
+		slog.String("tofa_model", cfg.TofaModel),
+		slog.String("tofa_base_url", cfg.TofaBaseURL),
+		slog.Float64("tofa_temperature", float64(cfg.TofaTemperature)),
+		slog.Float64("tofa_top_p", float64(cfg.TofaTopP)),
+		slog.Int("tofa_max_output_tokens", int(cfg.TofaMaxOutputTokens)),
 	)
 }
 
@@ -221,73 +215,51 @@ func (cm *ConfigManager) Reload(ctx context.Context) error {
 		newConfig.OwnerID = *ownerIDSecret.Computed
 	}
 
-	// Parse GCP configuration
-	if gcpProjectIDSecret, ok := secrets["GCP_PROJECT_ID"]; ok && gcpProjectIDSecret.Computed != nil {
-		newConfig.GCPProjectID = *gcpProjectIDSecret.Computed
+	// Parse Nebius Token Factory configuration
+	if tofaAPIKeySecret, ok := secrets["TOFA_API_KEY"]; ok && tofaAPIKeySecret.Computed != nil {
+		newConfig.TofaAPIKey = *tofaAPIKeySecret.Computed
 	}
 
-	if gcpLocationSecret, ok := secrets["GCP_LOCATION"]; ok && gcpLocationSecret.Computed != nil {
-		newConfig.GCPLocation = *gcpLocationSecret.Computed
+	if tofaModelSecret, ok := secrets["TOFA_MODEL"]; ok && tofaModelSecret.Computed != nil {
+		newConfig.TofaModel = *tofaModelSecret.Computed
 	}
-	if newConfig.GCPLocation == "" {
-		newConfig.GCPLocation = "us-central1"
-	}
-
-	if gcpSASecret, ok := secrets["GCP_SA"]; ok && gcpSASecret.Computed != nil {
-		newConfig.GCPSA = *gcpSASecret.Computed
+	if newConfig.TofaModel == "" {
+		newConfig.TofaModel = "meta-llama/Llama-3.3-70B-Instruct"
 	}
 
-	// Parse gemini_system_prompt
-	if geminiSystemPromptSecret, ok := secrets["GEMINI_SYSTEM_PROMPT"]; ok && geminiSystemPromptSecret.Computed != nil {
-		newConfig.GeminiSystemPrompt = *geminiSystemPromptSecret.Computed
+	if tofaBaseURLSecret, ok := secrets["TOFA_BASE_URL"]; ok && tofaBaseURLSecret.Computed != nil {
+		newConfig.TofaBaseURL = *tofaBaseURLSecret.Computed
+	}
+	if newConfig.TofaBaseURL == "" {
+		newConfig.TofaBaseURL = "https://api.tokenfactory.nebius.com/v1"
 	}
 
-	// Parse gemini_model
-	if geminiModelSecret, ok := secrets["GEMINI_MODEL"]; ok && geminiModelSecret.Computed != nil {
-		newConfig.GeminiModel = *geminiModelSecret.Computed
-	}
-	if newConfig.GeminiModel == "" {
-		newConfig.GeminiModel = "gemini-2.0-flash-exp"
+	if tofaSystemPromptSecret, ok := secrets["TOFA_SYSTEM_PROMPT"]; ok && tofaSystemPromptSecret.Computed != nil {
+		newConfig.TofaSystemPrompt = *tofaSystemPromptSecret.Computed
 	}
 
-	// Parse Gemini parameters with defaults
-	newConfig.GeminiTemperature = 0.4
-	if tempSecret, ok := secrets["GEMINI_TEMPERATURE"]; ok && tempSecret.Computed != nil {
+	// Parse TOFA generation parameters with defaults
+	newConfig.TofaTemperature = 0.4
+	if tempSecret, ok := secrets["TOFA_TEMPERATURE"]; ok && tempSecret.Computed != nil {
 		temp, err := strconv.ParseFloat(*tempSecret.Computed, 32)
 		if err == nil {
-			newConfig.GeminiTemperature = float32(temp)
+			newConfig.TofaTemperature = float32(temp)
 		}
 	}
 
-	newConfig.GeminiTopP = 0.95
-	if topPSecret, ok := secrets["GEMINI_TOP_P"]; ok && topPSecret.Computed != nil {
+	newConfig.TofaTopP = 0.95
+	if topPSecret, ok := secrets["TOFA_TOP_P"]; ok && topPSecret.Computed != nil {
 		tp, err := strconv.ParseFloat(*topPSecret.Computed, 32)
 		if err == nil {
-			newConfig.GeminiTopP = float32(tp)
+			newConfig.TofaTopP = float32(tp)
 		}
 	}
 
-	newConfig.GeminiTopK = 40
-	if topKSecret, ok := secrets["GEMINI_TOP_K"]; ok && topKSecret.Computed != nil {
-		tk, err := strconv.Atoi(*topKSecret.Computed)
-		if err == nil {
-			newConfig.GeminiTopK = int32(tk)
-		}
-	}
-
-	newConfig.GeminiMaxOutputTokens = 2048
-	if maxTokensSecret, ok := secrets["GEMINI_MAX_OUTPUT_TOKENS"]; ok && maxTokensSecret.Computed != nil {
+	newConfig.TofaMaxOutputTokens = 2048
+	if maxTokensSecret, ok := secrets["TOFA_MAX_OUTPUT_TOKENS"]; ok && maxTokensSecret.Computed != nil {
 		mt, err := strconv.Atoi(*maxTokensSecret.Computed)
 		if err == nil {
-			newConfig.GeminiMaxOutputTokens = int32(mt)
-		}
-	}
-
-	newConfig.GeminiThinkingBudget = 300
-	if thinkingBudgetSecret, ok := secrets["GEMINI_THINKING_BUDGET"]; ok && thinkingBudgetSecret.Computed != nil {
-		tb, err := strconv.Atoi(*thinkingBudgetSecret.Computed)
-		if err == nil {
-			newConfig.GeminiThinkingBudget = int32(tb)
+			newConfig.TofaMaxOutputTokens = int32(mt)
 		}
 	}
 
