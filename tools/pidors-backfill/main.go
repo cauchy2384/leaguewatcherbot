@@ -15,6 +15,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"flag"
@@ -57,10 +58,13 @@ func run(args []string, logger *slog.Logger) int {
 		logger = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	}
 
-	p, err := loadPidors(*jsonPath)
+	p, loadWarnings, err := loadPidors(*jsonPath)
 	if err != nil {
 		logger.Error("failed to load pidors.json", "path", *jsonPath, "error", err)
 		return exitCLIMisuse
+	}
+	for _, w := range loadWarnings {
+		logger.Warn("load warning", "reason", w)
 	}
 
 	rows, warnings := computePlan(p)
@@ -120,18 +124,30 @@ func run(args []string, logger *slog.Logger) int {
 	return exitOK
 }
 
-// loadPidors is a thin adapter around os.ReadFile + json.Unmarshal that
-// produces clearer errors than bare os/json errors.
-func loadPidors(path string) (*repository.Pidor, error) {
+// loadPidors parses the pidors.json file. Matches the bot's own reader
+// (internal/leaguewatcher/bot/repository/pidor.go NewPidor) which uses
+// a streaming Decoder and stops at the first complete JSON value —
+// trailing data after the closing brace is ignored with a warning.
+// json.Unmarshal would refuse the real prod file, which has trailing
+// whitespace/garbage from a previous bot-write bug.
+func loadPidors(path string) (*repository.Pidor, []string, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("read: %w", err)
+		return nil, nil, fmt.Errorf("read: %w", err)
 	}
+	dec := json.NewDecoder(bytes.NewReader(data))
 	var p repository.Pidor
-	if err := json.Unmarshal(data, &p); err != nil {
-		return nil, fmt.Errorf("decode: %w", err)
+	if err := dec.Decode(&p); err != nil {
+		return nil, nil, fmt.Errorf("decode: %w", err)
 	}
-	return &p, nil
+	var warnings []string
+	// Anything left in the decoder? More() reports whether the stream
+	// has additional values beyond the one we just decoded.
+	if dec.More() {
+		warnings = append(warnings,
+			"pidors.json has trailing data after the main JSON document; ignoring it")
+	}
+	return &p, warnings, nil
 }
 
 func printPlanSummary(rows []planRow, logger *slog.Logger) {
