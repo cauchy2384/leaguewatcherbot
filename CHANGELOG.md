@@ -1,3 +1,11 @@
+# [1.11.0](https://github.com/cauchy2384/leaguewatcherbot/compare/v1.10.0...v1.11.0) (2026-10-19)
+
+
+### Features
+
+* add pidor_rolls table for pidor-event persistence ([#25](https://github.com/cauchy2384/leaguewatcherbot/issues/25)) ([70a211f](https://github.com/cauchy2384/leaguewatcherbot/commit/70a211f0526fe505468fbe32af094fb43602d06b))
+* **migrator:** fall back to Doppler token when DATABASE_URL is not in env ([#26](https://github.com/cauchy2384/leaguewatcherbot/issues/26)) ([aec43fd](https://github.com/cauchy2384/leaguewatcherbot/commit/aec43fdba4c006ae7c8d3be1f058c284080eafeb))
+
 # [1.10.0](https://github.com/cauchy2384/leaguewatcherbot/compare/v1.9.0...v1.10.0) (2026-10-19)
 
 
