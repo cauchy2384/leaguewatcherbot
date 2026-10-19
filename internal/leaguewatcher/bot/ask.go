@@ -51,19 +51,26 @@ type tofaChatResponse struct {
 	} `json:"error,omitempty"`
 }
 
-// generateWithTokenFactory calls Nebius Token Factory with the given query
-// and returns the assistant reply. The API is OpenAI-compatible; we use the
-// stdlib net/http client to avoid pulling a third-party SDK.
-func generateWithTokenFactory(ctx context.Context, cfg leaguewatcher.Config, query string) (string, error) {
+// buildMessages assembles the OpenAI-compatible message slice for a Q&A
+// turn: an optional system prompt and the user's question. Pure helper so
+// callers (and tests) can compose context from any source before handing
+// the slice to the LLM.
+func buildMessages(query, basePrompt string) []tofaMessage {
+	msgs := make([]tofaMessage, 0, 2)
+	if basePrompt != "" {
+		msgs = append(msgs, tofaMessage{Role: "system", Content: basePrompt})
+	}
+	msgs = append(msgs, tofaMessage{Role: "user", Content: query})
+	return msgs
+}
+
+// generateWithTokenFactory calls Nebius Token Factory with the given
+// message slice and returns the assistant reply. The API is OpenAI-compatible;
+// we use the stdlib net/http client to avoid pulling a third-party SDK.
+func generateWithTokenFactory(ctx context.Context, cfg leaguewatcher.Config, messages []tofaMessage) (string, error) {
 	if cfg.TofaAPIKey == "" || cfg.TofaModel == "" {
 		return "", ErrLLMNotConfigured
 	}
-
-	messages := make([]tofaMessage, 0, 2)
-	if cfg.TofaSystemPrompt != "" {
-		messages = append(messages, tofaMessage{Role: "system", Content: cfg.TofaSystemPrompt})
-	}
-	messages = append(messages, tofaMessage{Role: "user", Content: query})
 
 	reqBody := tofaChatRequest{
 		Model:       cfg.TofaModel,
@@ -135,7 +142,8 @@ func (b *Bot) ask(ctx context.Context, s *discordgo.Session, m *discordgo.Messag
 	defer cancel()
 
 	// Call Nebius Token Factory
-	answer, err := generateWithTokenFactory(ctx, cfg, query)
+	messages := buildMessages(query, cfg.TofaSystemPrompt)
+	answer, err := generateWithTokenFactory(ctx, cfg, messages)
 	if err != nil {
 		if errors.Is(err, ErrLLMNotConfigured) {
 			s.ChannelMessageSendReply(m.ChannelID, "Я не настроен для этого, извини!", m.Reference())

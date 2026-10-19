@@ -80,7 +80,8 @@ func TestGenerateWithTokenFactory_Success(t *testing.T) {
 	defer server.Close()
 
 	cfg := baseTestConfig(server.URL)
-	answer, err := generateWithTokenFactory(context.Background(), cfg, "hi")
+	messages := buildMessages("hi", "")
+	answer, err := generateWithTokenFactory(context.Background(), cfg, messages)
 
 	is.NoErr(err)
 	is.Equal(answer, "Привет!")
@@ -110,8 +111,8 @@ func TestGenerateWithTokenFactory_SystemPromptIncluded(t *testing.T) {
 	defer server.Close()
 
 	cfg := baseTestConfig(server.URL)
-	cfg.TofaSystemPrompt = "Ты — бот."
-	_, err := generateWithTokenFactory(context.Background(), cfg, "hi")
+	messages := buildMessages("hi", "Ты — бот.")
+	_, err := generateWithTokenFactory(context.Background(), cfg, messages)
 
 	is.NoErr(err)
 	is.Equal(len(captured.body.Messages), 2)
@@ -134,8 +135,8 @@ func TestGenerateWithTokenFactory_SystemPromptOmittedWhenEmpty(t *testing.T) {
 	defer server.Close()
 
 	cfg := baseTestConfig(server.URL)
-	cfg.TofaSystemPrompt = ""
-	_, err := generateWithTokenFactory(context.Background(), cfg, "hi")
+	messages := buildMessages("hi", "")
+	_, err := generateWithTokenFactory(context.Background(), cfg, messages)
 
 	is.NoErr(err)
 	is.Equal(len(captured.body.Messages), 1)
@@ -174,7 +175,8 @@ func TestGenerateWithTokenFactory_NotConfigured(t *testing.T) {
 			t.Parallel()
 			is := is.New(t)
 
-			_, err := generateWithTokenFactory(context.Background(), tt.cfg, "hi")
+			messages := buildMessages("hi", "")
+			_, err := generateWithTokenFactory(context.Background(), tt.cfg, messages)
 			is.True(err != nil)
 			is.True(errors.Is(err, ErrLLMNotConfigured))
 		})
@@ -192,7 +194,8 @@ func TestGenerateWithTokenFactory_Non2xx(t *testing.T) {
 	defer server.Close()
 
 	cfg := baseTestConfig(server.URL)
-	_, err := generateWithTokenFactory(context.Background(), cfg, "hi")
+	messages := buildMessages("hi", "")
+	_, err := generateWithTokenFactory(context.Background(), cfg, messages)
 
 	is.True(err != nil)
 	is.True(!errors.Is(err, ErrLLMNotConfigured)) // Should be transient, not config
@@ -210,7 +213,8 @@ func TestGenerateWithTokenFactory_EmptyChoices(t *testing.T) {
 	defer server.Close()
 
 	cfg := baseTestConfig(server.URL)
-	answer, err := generateWithTokenFactory(context.Background(), cfg, "hi")
+	messages := buildMessages("hi", "")
+	answer, err := generateWithTokenFactory(context.Background(), cfg, messages)
 
 	is.NoErr(err)
 	is.Equal(answer, "") // Bot.ask will translate this to "Оракул хранит молчание."
@@ -228,7 +232,8 @@ func TestGenerateWithTokenFactory_InvalidJSON(t *testing.T) {
 	defer server.Close()
 
 	cfg := baseTestConfig(server.URL)
-	_, err := generateWithTokenFactory(context.Background(), cfg, "hi")
+	messages := buildMessages("hi", "")
+	_, err := generateWithTokenFactory(context.Background(), cfg, messages)
 
 	is.True(err != nil)
 	is.True(strings.Contains(err.Error(), "parse"))
