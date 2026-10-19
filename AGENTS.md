@@ -343,11 +343,13 @@ export BOT_OWNER_ID="discord-username-string"  # NOT user ID number
    - Opens file for every write operation
    - **Do NOT add high-frequency logging** without batching
 
-5. **Pidor day logic uses system clock**
-   - File: `bot/pidor.go:82-92`
-   - Uses `time.Now().YearDay()` for daily reset
-   - **Clock changes cause inconsistent game state**
-   - **Do NOT modify** timestamp logic
+5. ~~**Pidor day logic uses system clock**~~ — **fixed by ADR-012.**
+   The bot no longer uses `time.YearDay()` against `pidors.json`.
+   Today's date is computed in the application via
+   `time.Now().In(Europe/Moscow)` and stored as a DATE in
+   `pidor_rolls`; the DB's `UNIQUE(channel_id, rolled_on)` enforces
+   one-winner-per-day atomically. See ADR-012 and
+   `internal/leaguewatcher/bot/repository/pidor_store_pg.go`.
 
 6. **No environment variable validation**
    - File: `cmd/leaguewatcher/main.go`
