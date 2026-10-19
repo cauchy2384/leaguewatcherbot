@@ -81,7 +81,7 @@ func run(args []string, logger *slog.Logger) int {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	dbURL, err := newDatabaseResolver(*dbURLFlag).Resolve(ctx)
+	dbURL, err := db.NewDSNResolver(*dbURLFlag).Resolve(ctx)
 	if err != nil {
 		logger.Error("failed to resolve DATABASE_URL", "error", err)
 		return exitConfigError

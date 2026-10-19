@@ -44,6 +44,8 @@ leaguewatcherbot/
 │               └── match.go   # In-memory match cache for deduplication
 │
 ├── tools/
+│   ├── migrator/              # Standalone SQL migration runner (ADR-010)
+│   ├── pidors-backfill/       # One-shot importer: pidors.json → pidor_rolls (ADR-011)
 │   └── pidors2csv/            # Utility to export pidor statistics to CSV
 │
 ├── config.yaml                # Configuration file (poll period, players, channel ID)
@@ -253,11 +255,13 @@ External Systems:
 
 **Constraint**: `UNIQUE (channel_id, rolled_on)` — at most one winner per channel per day enforced at the storage layer (defence-in-depth against double-roll races).
 
-**Status**: Schema landed (migration 0002, ADR-011). Bot code 
-**does not yet read or write** this table — the consumer PR is
-tracked separately. See `adr/011-pidor-rolls-table.md` for the
-backfill strategy (deterministic synthetic dates per user within
-each channel).
+**Status**: Schema landed (migration 0002, ADR-011). Historical
+aggregates can be imported via `tools/pidors-backfill` (one-shot CLI,
+idempotent via `ON CONFLICT DO NOTHING` + deterministic synthetic
+dates per user within each channel). Bot code **does not yet read or
+write** this table — the consumer PR is tracked separately. See
+`adr/011-pidor-rolls-table.md` for the full schema and backfill
+rationale.
 
 ---
 
