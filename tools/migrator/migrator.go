@@ -129,17 +129,65 @@ func (h *pgHandle) ReadApplied(ctx context.Context) (map[int]appliedRow, error) 
 	return out, rows.Err()
 }
 
-func (h *pgHandle) ApplyMigration(ctx context.Context, m db.Migration, dir direction) error {
-	var sqlBody, bookkeepSQL string
+// stmtKind classifies the statements that make up a single migration
+// apply/rollback. Tests use it to assert ordering without needing a real
+// Postgres.
+type stmtKind int
+
+const (
+	stmtBody stmtKind = iota
+	stmtBookkeep
+)
+
+// migrationStmt is one step of an apply/rollback.
+type migrationStmt struct {
+	sql  string
+	args []any
+	kind stmtKind
+}
+
+// migrationStatements returns the SQL statements to execute for a single
+// migration, in order. The ordering is direction-specific and
+// load-bearing for the meta-migration (0001) where the up.sql creates
+// schema_migrations and the down.sql drops it:
+//
+//	up:   DDL first, then INSERT bookkeeping (row needs the table).
+//	down: DELETE bookkeeping first, then DDL (table may be dropped).
+//
+// Statements with empty sql bodies are skipped, so an empty .up.sql or
+// .down.sql is a no-op rather than a parse error.
+func migrationStatements(m db.Migration, dir direction) []migrationStmt {
+	var body migrationStmt
+	var bookkeep migrationStmt
 	switch dir {
 	case dirUp:
-		sqlBody = m.UpSQL
-		bookkeepSQL = `INSERT INTO schema_migrations (version, name) VALUES ($1, $2)`
+		body = migrationStmt{sql: m.UpSQL, kind: stmtBody}
+		bookkeep = migrationStmt{
+			sql:  `INSERT INTO schema_migrations (version, name) VALUES ($1, $2)`,
+			args: []any{m.Version, m.Name},
+			kind: stmtBookkeep,
+		}
+		if body.sql == "" {
+			return []migrationStmt{bookkeep}
+		}
+		return []migrationStmt{body, bookkeep}
 	case dirDown:
-		sqlBody = m.DownSQL
-		bookkeepSQL = `DELETE FROM schema_migrations WHERE version = $1`
+		body = migrationStmt{sql: m.DownSQL, kind: stmtBody}
+		bookkeep = migrationStmt{
+			sql:  `DELETE FROM schema_migrations WHERE version = $1`,
+			args: []any{m.Version},
+			kind: stmtBookkeep,
+		}
+		out := []migrationStmt{bookkeep}
+		if body.sql != "" {
+			out = append(out, body)
+		}
+		return out
 	}
+	return nil
+}
 
+func (h *pgHandle) ApplyMigration(ctx context.Context, m db.Migration, dir direction) error {
 	tx, err := h.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("begin migration txn: %w", err)
@@ -151,10 +199,15 @@ func (h *pgHandle) ApplyMigration(ctx context.Context, m db.Migration, dir direc
 		return fmt.Errorf("set lock_timeout: %w", err)
 	}
 
-	if sqlBody != "" {
-		tag, err := tx.Exec(ctx, sqlBody)
+	for _, stmt := range migrationStatements(m, dir) {
+		tag, err := tx.Exec(ctx, stmt.sql, stmt.args...)
 		if err != nil {
-			return fmt.Errorf("migration %d (%s) %s failed: %w", m.Version, m.Name, dirString(dir), err)
+			kindName := "body"
+			if stmt.kind == stmtBookkeep {
+				kindName = "bookkeeping"
+			}
+			return fmt.Errorf("migration %d (%s) %s %s failed: %w",
+				m.Version, m.Name, dirString(dir), kindName, err)
 		}
 		h.logger.Info("migration statement executed",
 			slog.Int("version", m.Version),
@@ -162,16 +215,6 @@ func (h *pgHandle) ApplyMigration(ctx context.Context, m db.Migration, dir direc
 			slog.String("direction", dirString(dir)),
 			slog.String("tag", tag.String()),
 		)
-	}
-
-	var bkErr error
-	if dir == dirUp {
-		_, bkErr = tx.Exec(ctx, bookkeepSQL, m.Version, m.Name)
-	} else {
-		_, bkErr = tx.Exec(ctx, bookkeepSQL, m.Version)
-	}
-	if bkErr != nil {
-		return fmt.Errorf("migration %d bookkeeping failed: %w", m.Version, bkErr)
 	}
 
 	if err := tx.Commit(ctx); err != nil {

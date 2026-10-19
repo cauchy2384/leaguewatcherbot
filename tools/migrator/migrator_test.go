@@ -224,6 +224,53 @@ func TestApplyPlan_PropagatesLockError(t *testing.T) {
 	is.Equal(len(h.applied), 0) // no migrations applied when lock fails
 }
 
+func TestMigrationStatements_UpOrder(t *testing.T) {
+	t.Parallel()
+	is := is.New(t)
+
+	m := db.Migration{Version: 1, Name: "schema_migrations", UpSQL: "CREATE TABLE x", DownSQL: "DROP TABLE x"}
+	stmts := migrationStatements(m, dirUp)
+
+	is.Equal(len(stmts), 2)
+	is.Equal(stmts[0].kind, stmtBody) // DDL first
+	is.Equal(stmts[0].sql, "CREATE TABLE x")
+	is.Equal(stmts[1].kind, stmtBookkeep) // then INSERT bookkeeping
+	is.Equal(stmts[1].args[0], 1)
+	is.Equal(stmts[1].args[1], "schema_migrations")
+}
+
+// TestMigrationStatements_DownOrder guards the regression where the
+// meta-migration's down.sql (which drops schema_migrations) ran before
+// the DELETE bookkeeping step, causing 42P01 and a rolled-back txn.
+// See commit history for the original `migrate down` failure.
+func TestMigrationStatements_DownOrder(t *testing.T) {
+	t.Parallel()
+	is := is.New(t)
+
+	m := db.Migration{Version: 1, Name: "schema_migrations", UpSQL: "CREATE TABLE x", DownSQL: "DROP TABLE x"}
+	stmts := migrationStatements(m, dirDown)
+
+	is.Equal(len(stmts), 2)
+	is.Equal(stmts[0].kind, stmtBookkeep) // DELETE first (before the table may be dropped)
+	is.Equal(stmts[1].kind, stmtBody)     // then DDL
+	is.Equal(stmts[1].sql, "DROP TABLE x")
+}
+
+func TestMigrationStatements_EmptyBody(t *testing.T) {
+	t.Parallel()
+	is := is.New(t)
+
+	m := db.Migration{Version: 2, Name: "noop", UpSQL: "", DownSQL: ""}
+
+	up := migrationStatements(m, dirUp)
+	is.Equal(len(up), 1)
+	is.Equal(up[0].kind, stmtBookkeep)
+
+	down := migrationStatements(m, dirDown)
+	is.Equal(len(down), 1)
+	is.Equal(down[0].kind, stmtBookkeep)
+}
+
 func TestApplyPlan_EmptyPlanIsNoop(t *testing.T) {
 	t.Parallel()
 	is := is.New(t)
