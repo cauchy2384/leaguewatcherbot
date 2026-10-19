@@ -71,27 +71,27 @@ func TestSearchTavily_Success(t *testing.T) {
 	captured := &capturedTavilyRequest{}
 	server := newFakeTavilyServer(t, http.StatusOK, map[string]any{
 		"results": []map[string]any{
-			{"title": "Onyxia Guide", "url": "https://example.com/ony", "content": "Onyxia is a 40-man boss", "score": 0.95},
-			{"title": "ZG Guide", "url": "https://example.com/zg", "content": "Zul'Gurub is a 20-man raid", "score": 0.85},
+			{"title": "Гайд по Ониксии", "url": "https://wow.example/onyxia", "content": "Ониксия — рейд на 40 человек, фаза 3.", "score": 0.95},
+			{"title": "Гайд по Зул'Гурубу", "url": "https://wow.example/zg", "content": "Зул'Гуруб — рейд на 20 человек в Тернистой долине.", "score": 0.85},
 		},
 	}, captured)
 	defer server.Close()
 
 	cfg := baseTavilyConfig(server.URL)
-	results, err := searchTavily(context.Background(), cfg, "ony guide")
+	results, err := searchTavily(context.Background(), cfg, "гайд на Ониксию")
 
 	is.NoErr(err)
 	is.Equal(len(results), 2)
-	is.Equal(results[0].Title, "Onyxia Guide")
-	is.Equal(results[0].URL, "https://example.com/ony")
-	is.Equal(results[0].Content, "Onyxia is a 40-man boss")
+	is.Equal(results[0].Title, "Гайд по Ониксии")
+	is.Equal(results[0].URL, "https://wow.example/onyxia")
+	is.Equal(results[0].Content, "Ониксия — рейд на 40 человек, фаза 3.")
 	is.Equal(results[0].Score, 0.95)
 
 	// Verify request shape
 	is.Equal(captured.path, "/search")
 	is.Equal(captured.authorization, "Bearer test-tavily-key")
 	is.Equal(captured.contentType, "application/json")
-	is.Equal(captured.body.Query, "ony guide")
+	is.Equal(captured.body.Query, "гайд на Ониксию")
 	is.Equal(captured.body.SearchDepth, "basic")
 	is.Equal(captured.body.Topic, "general")
 	is.Equal(captured.body.MaxResults, 3)
@@ -112,13 +112,13 @@ func TestSearchTavily_DomainFiltersFromCSV(t *testing.T) {
 	defer server.Close()
 
 	cfg := baseTavilyConfig(server.URL)
-	cfg.TavilyIncludeDomains = "wowhead.com, ascension.gg ,"
+	cfg.TavilyIncludeDomains = "project-ascension.fandom.com, ascension.gg ,"
 	cfg.TavilyExcludeDomains = "pinterest.com , quora.com"
 
-	_, err := searchTavily(context.Background(), cfg, "ony")
+	_, err := searchTavily(context.Background(), cfg, "тактика Хаккар")
 	is.NoErr(err)
 
-	is.Equal(captured.body.IncludeDomains, []string{"wowhead.com", "ascension.gg"})
+	is.Equal(captured.body.IncludeDomains, []string{"project-ascension.fandom.com", "ascension.gg"})
 	is.Equal(captured.body.ExcludeDomains, []string{"pinterest.com", "quora.com"})
 }
 
@@ -137,7 +137,7 @@ func TestSearchTavily_CustomDepthAndMaxResults(t *testing.T) {
 	cfg.TavilyMaxResults = 7
 	cfg.TavilyTopic = "news"
 
-	_, err := searchTavily(context.Background(), cfg, "ony")
+	_, err := searchTavily(context.Background(), cfg, "рейд резет на Ониксии")
 	is.NoErr(err)
 
 	is.Equal(captured.body.SearchDepth, "advanced")
@@ -150,7 +150,7 @@ func TestSearchTavily_NotConfigured(t *testing.T) {
 	is := is.New(t)
 
 	cfg := leaguewatcher.Config{} // no API key
-	_, err := searchTavily(context.Background(), cfg, "q")
+	_, err := searchTavily(context.Background(), cfg, "Сколько боссов в БВЛ?")
 
 	is.True(err != nil)
 	is.True(errors.Is(err, ErrTavilyNotConfigured))
@@ -167,7 +167,7 @@ func TestSearchTavily_Non2xx(t *testing.T) {
 	defer server.Close()
 
 	cfg := baseTavilyConfig(server.URL)
-	_, err := searchTavily(context.Background(), cfg, "ony")
+	_, err := searchTavily(context.Background(), cfg, "Хромаггус тактика")
 
 	is.True(err != nil)
 	is.True(!errors.Is(err, ErrTavilyNotConfigured)) // Transient, not config
@@ -185,7 +185,7 @@ func TestSearchTavily_EmptyResults(t *testing.T) {
 	defer server.Close()
 
 	cfg := baseTavilyConfig(server.URL)
-	results, err := searchTavily(context.Background(), cfg, "ony")
+	results, err := searchTavily(context.Background(), cfg, "Рагнарос бис шмот")
 
 	is.NoErr(err)
 	is.Equal(len(results), 0) // Empty is fine: caller proceeds LLM-only
@@ -203,7 +203,7 @@ func TestSearchTavily_InvalidJSON(t *testing.T) {
 	defer server.Close()
 
 	cfg := baseTavilyConfig(server.URL)
-	_, err := searchTavily(context.Background(), cfg, "ony")
+	_, err := searchTavily(context.Background(), cfg, "Аттюн на Ониксию")
 
 	is.True(err != nil)
 	is.True(strings.Contains(err.Error(), "parse"))
@@ -225,7 +225,7 @@ func TestSearchTavily_Timeout(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
 
-	_, err := searchTavily(ctx, cfg, "ony")
+	_, err := searchTavily(ctx, cfg, "Ониксия дыхание")
 
 	is.True(err != nil)
 	is.True(errors.Is(err, context.DeadlineExceeded) || strings.Contains(err.Error(), "deadline exceeded"))
