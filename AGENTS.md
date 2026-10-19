@@ -496,6 +496,22 @@ git push origin feature-branch
 - **Region codes**: Uppercased for API (`EUW`), lowercased in storage (`euw`)
 - **Stability**: Third-party service, no SLA
 
+### Nebius Token Factory (OpenAI-compatible chat completions)
+- **Endpoint**: `https://api.tokenfactory.nebius.com/v1/chat/completions`
+- **Authentication**: Bearer token via `TOFA_API_KEY` (Doppler)
+- **Default model**: `meta-llama/Llama-3.3-70B-Instruct` (override `TOFA_MODEL`)
+- **Timeout**: enforced by caller (15 s context in `Bot.ask`)
+- **Used for**: `@bot <question>` Q&A flow
+- **See**: ADR-007
+
+### Tavily Search
+- **Endpoint**: `https://api.tavily.com/search`
+- **Authentication**: Bearer token via `TAVILY_API_KEY` (Doppler)
+- **Default timeout**: 5 s child context of `Bot.ask`'s 15 s budget
+- **Used for**: optional search grounding before the LLM call
+- **Failure mode**: silently degrades to LLM-only on any error
+- **See**: ADR-008
+
 ### Go Dependencies
 - `github.com/hasura/go-graphql-client` - GraphQL client
 - `github.com/kyokomi/emoji/v2` - Emoji rendering for Discord
@@ -559,7 +575,7 @@ git push origin feature-branch
 | **Test pattern** | Table-driven with `t.Run()` + `t.Parallel()` |
 | **Config file** | `config.yaml` in executable directory |
 | **Data files** | `pidors.json`, `log.json` (auto-generated) |
-| **Env vars** | `BOT_DISCORD_TOKEN`, `BOT_OWNER_ID` |
+| **Env vars** | `DOPPLER_TOKEN` (only); bot secrets live in Doppler |
 | **Assertion library** | `github.com/matryer/is` (preferred) |
 | **Logging** | `go.uber.org/zap` structured logging |
 
