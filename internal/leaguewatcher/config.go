@@ -49,6 +49,11 @@ type Config struct {
 	// Outer ask budget. Covers the optional Tavily search step and the
 	// LLM call together. Default 15s matches the historical hardcoded value.
 	AskTimeoutSeconds int `yaml:"-"` // ASK_TIMEOUT_SECONDS
+
+	// Neon PostgreSQL (from Doppler)
+	DatabaseURL       string `yaml:"-"` // DATABASE_URL (direct endpoint, migrations/tools)
+	DatabaseURLPooled string `yaml:"-"` // DATABASE_URL_POOLED (pooled endpoint, runtime traffic)
+	NeonAuthBaseURL   string `yaml:"-"` // NEON_AUTH_BASE_URL
 }
 
 func (cfg Config) IsValid() error {
@@ -119,6 +124,8 @@ func (cfg Config) LogValue() slog.Value {
 		slog.String("tavily_include_domains", cfg.TavilyIncludeDomains),
 		slog.String("tavily_exclude_domains", cfg.TavilyExcludeDomains),
 		slog.Int("ask_timeout_seconds", cfg.AskTimeoutSeconds),
+		slog.Bool("database_configured", cfg.DatabaseURL != "" || cfg.DatabaseURLPooled != ""),
+		slog.Bool("neon_auth_configured", cfg.NeonAuthBaseURL != ""),
 	)
 }
 
@@ -261,6 +268,19 @@ func (cm *ConfigManager) Reload(ctx context.Context) error {
 
 	if tofaSystemPromptSecret, ok := secrets["TOFA_SYSTEM_PROMPT"]; ok && tofaSystemPromptSecret.Computed != nil {
 		newConfig.TofaSystemPrompt = *tofaSystemPromptSecret.Computed
+	}
+
+	// Parse Neon PostgreSQL configuration (optional - enables DB-backed repositories)
+	if databaseURLSecret, ok := secrets["DATABASE_URL"]; ok && databaseURLSecret.Computed != nil {
+		newConfig.DatabaseURL = *databaseURLSecret.Computed
+	}
+
+	if databaseURLPooledSecret, ok := secrets["DATABASE_URL_POOLED"]; ok && databaseURLPooledSecret.Computed != nil {
+		newConfig.DatabaseURLPooled = *databaseURLPooledSecret.Computed
+	}
+
+	if neonAuthBaseURLSecret, ok := secrets["NEON_AUTH_BASE_URL"]; ok && neonAuthBaseURLSecret.Computed != nil {
+		newConfig.NeonAuthBaseURL = *neonAuthBaseURLSecret.Computed
 	}
 
 	// Parse TOFA generation parameters with defaults

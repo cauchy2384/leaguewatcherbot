@@ -329,6 +329,12 @@ External Systems:
 4. Set environment variables:
    - `BOT_DISCORD_TOKEN`: Discord bot token
    - `BOT_OWNER_ID`: Discord username for bot owner
+   - `DOPPLER_TOKEN`: Doppler service token (configuration is loaded from Doppler secrets)
+
+   Optional Doppler-managed secrets (Neon PostgreSQL, per ADR-009):
+   - `DATABASE_URL`: direct Neon connection string (migrations/tools)
+   - `DATABASE_URL_POOLED`: pooled Neon connection string (runtime traffic)
+   - `NEON_AUTH_BASE_URL`: Neon Auth base URL (reachability check only; auth flows deferred)
 5. Run: `go run cmd/leaguewatcher/main.go`
 
 ### Testing Framework
