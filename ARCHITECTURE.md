@@ -337,6 +337,28 @@ External Systems:
    - `NEON_AUTH_BASE_URL`: Neon Auth base URL (reachability check only; auth flows deferred)
 5. Run: `go run cmd/leaguewatcher/main.go`
 
+### Schema Migrations (per ADR-010)
+
+SQL schema changes are applied via `tools/migrator`, a standalone CLI:
+
+```bash
+doppler run -- go run tools/migrator/main.go status   # what's applied
+# doppler run -- go run tools/migrator/main.go up     # apply pending
+# doppler run -- go run tools/migrator/main.go down   # roll back one
+```
+
+Migration files live in `internal/leaguewatcher/db/migrations/` as
+`{NNNN}_{snake_name}.{up|down}.sql` pairs and are compiled into the
+binary via `embed.FS`. The `schema_migrations` table (created by
+migration `0001`) records which version was applied and when.
+
+**Rules:**
+- Never edit a migration file once it has been merged to `main`.
+- The bot does **not** auto-apply migrations on startup; operators run
+  the migrator explicitly.
+- The migrator uses `DATABASE_URL` (direct endpoint), never
+  `DATABASE_URL_POOLED` — advisory locks require session affinity.
+
 ### Testing Framework
 - **Framework**: Go standard `testing` package
 - **Assertions**: `github.com/stretchr/testify/assert` and `testify/require`
