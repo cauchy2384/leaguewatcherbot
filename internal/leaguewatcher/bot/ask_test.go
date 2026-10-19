@@ -80,7 +80,7 @@ func TestGenerateWithTokenFactory_Success(t *testing.T) {
 	defer server.Close()
 
 	cfg := baseTestConfig(server.URL)
-	messages := buildMessages("hi", "")
+	messages := buildMessages("hi", "", nil)
 	answer, err := generateWithTokenFactory(context.Background(), cfg, messages)
 
 	is.NoErr(err)
@@ -111,7 +111,7 @@ func TestGenerateWithTokenFactory_SystemPromptIncluded(t *testing.T) {
 	defer server.Close()
 
 	cfg := baseTestConfig(server.URL)
-	messages := buildMessages("hi", "Ты — бот.")
+	messages := buildMessages("hi", "Ты — бот.", nil)
 	_, err := generateWithTokenFactory(context.Background(), cfg, messages)
 
 	is.NoErr(err)
@@ -135,7 +135,7 @@ func TestGenerateWithTokenFactory_SystemPromptOmittedWhenEmpty(t *testing.T) {
 	defer server.Close()
 
 	cfg := baseTestConfig(server.URL)
-	messages := buildMessages("hi", "")
+	messages := buildMessages("hi", "", nil)
 	_, err := generateWithTokenFactory(context.Background(), cfg, messages)
 
 	is.NoErr(err)
@@ -175,7 +175,7 @@ func TestGenerateWithTokenFactory_NotConfigured(t *testing.T) {
 			t.Parallel()
 			is := is.New(t)
 
-			messages := buildMessages("hi", "")
+			messages := buildMessages("hi", "", nil)
 			_, err := generateWithTokenFactory(context.Background(), tt.cfg, messages)
 			is.True(err != nil)
 			is.True(errors.Is(err, ErrLLMNotConfigured))
@@ -194,7 +194,7 @@ func TestGenerateWithTokenFactory_Non2xx(t *testing.T) {
 	defer server.Close()
 
 	cfg := baseTestConfig(server.URL)
-	messages := buildMessages("hi", "")
+	messages := buildMessages("hi", "", nil)
 	_, err := generateWithTokenFactory(context.Background(), cfg, messages)
 
 	is.True(err != nil)
@@ -213,11 +213,76 @@ func TestGenerateWithTokenFactory_EmptyChoices(t *testing.T) {
 	defer server.Close()
 
 	cfg := baseTestConfig(server.URL)
-	messages := buildMessages("hi", "")
+	messages := buildMessages("hi", "", nil)
 	answer, err := generateWithTokenFactory(context.Background(), cfg, messages)
 
 	is.NoErr(err)
 	is.Equal(answer, "") // Bot.ask will translate this to "Оракул хранит молчание."
+}
+
+func TestBuildMessages_NoResults(t *testing.T) {
+	t.Parallel()
+	is := is.New(t)
+
+	msgs := buildMessages("what is ony", "base prompt", nil)
+
+	is.Equal(len(msgs), 2)
+	is.Equal(msgs[0].Role, "system")
+	is.Equal(msgs[0].Content, "base prompt") // unchanged when no results
+	is.Equal(msgs[1].Role, "user")
+	is.Equal(msgs[1].Content, "what is ony")
+}
+
+func TestBuildMessages_NoResultsNoBasePrompt(t *testing.T) {
+	t.Parallel()
+	is := is.New(t)
+
+	msgs := buildMessages("what is ony", "", nil)
+
+	is.Equal(len(msgs), 1) // no system message added
+	is.Equal(msgs[0].Role, "user")
+	is.Equal(msgs[0].Content, "what is ony")
+}
+
+func TestBuildMessages_SingleResultNoBasePrompt(t *testing.T) {
+	t.Parallel()
+	is := is.New(t)
+
+	results := []tavilyResult{
+		{Title: "Onyxia Guide", URL: "https://example.com/ony", Content: "Onyxia is a 40-man raid boss."},
+	}
+	msgs := buildMessages("how many bosses", "", results)
+
+	is.Equal(len(msgs), 2)
+	is.Equal(msgs[0].Role, "system")
+	// Should NOT start with the standard separator when base prompt was empty
+	is.True(!strings.HasPrefix(msgs[0].Content, "\n\n"))
+	is.True(strings.Contains(msgs[0].Content, "Контекст из поиска"))
+	is.True(strings.Contains(msgs[0].Content, "Onyxia Guide"))
+	is.True(strings.Contains(msgs[0].Content, "https://example.com/ony"))
+	is.True(strings.Contains(msgs[0].Content, "Onyxia is a 40-man raid boss."))
+}
+
+func TestBuildMessages_MultipleResultsNumbered(t *testing.T) {
+	t.Parallel()
+	is := is.New(t)
+
+	results := []tavilyResult{
+		{Title: "A", URL: "https://a.example", Content: "alpha"},
+		{Title: "B", URL: "https://b.example", Content: "bravo"},
+		{Title: "C", URL: "https://c.example", Content: "charlie"},
+	}
+	msgs := buildMessages("q", "base", results)
+
+	is.Equal(len(msgs), 2)
+	sys := msgs[0].Content
+	is.True(strings.HasPrefix(sys, "base"))
+	is.True(strings.Contains(sys, "1. A"))
+	is.True(strings.Contains(sys, "2. B"))
+	is.True(strings.Contains(sys, "3. C"))
+	// User message must be untouched
+	is.Equal(msgs[1].Role, "user")
+	is.Equal(msgs[1].Content, "q")
 }
 
 func TestGenerateWithTokenFactory_InvalidJSON(t *testing.T) {
@@ -232,7 +297,7 @@ func TestGenerateWithTokenFactory_InvalidJSON(t *testing.T) {
 	defer server.Close()
 
 	cfg := baseTestConfig(server.URL)
-	messages := buildMessages("hi", "")
+	messages := buildMessages("hi", "", nil)
 	_, err := generateWithTokenFactory(context.Background(), cfg, messages)
 
 	is.True(err != nil)

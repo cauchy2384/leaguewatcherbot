@@ -52,13 +52,25 @@ type tofaChatResponse struct {
 }
 
 // buildMessages assembles the OpenAI-compatible message slice for a Q&A
-// turn: an optional system prompt and the user's question. Pure helper so
-// callers (and tests) can compose context from any source before handing
-// the slice to the LLM.
-func buildMessages(query, basePrompt string) []tofaMessage {
+// turn. If web-search results are provided, they are appended to the system
+// prompt as a numbered context block so the LLM can ground its answer.
+func buildMessages(query, basePrompt string, results []tavilyResult) []tofaMessage {
 	msgs := make([]tofaMessage, 0, 2)
-	if basePrompt != "" {
-		msgs = append(msgs, tofaMessage{Role: "system", Content: basePrompt})
+	system := basePrompt
+	if len(results) > 0 {
+		var sb strings.Builder
+		sb.WriteString(system)
+		if system != "" {
+			sb.WriteString("\n\n")
+		}
+		sb.WriteString("Контекст из поиска (используй для ответа, но не упоминай явно):\n")
+		for i, r := range results {
+			fmt.Fprintf(&sb, "%d. %s — %s\n%s\n\n", i+1, r.Title, r.URL, r.Content)
+		}
+		system = sb.String()
+	}
+	if system != "" {
+		msgs = append(msgs, tofaMessage{Role: "system", Content: system})
 	}
 	msgs = append(msgs, tofaMessage{Role: "user", Content: query})
 	return msgs
@@ -137,12 +149,32 @@ func (b *Bot) ask(ctx context.Context, s *discordgo.Session, m *discordgo.Messag
 	// Get config (hot-reload via ConfigManager)
 	cfg := b.configMgr.Get()
 
-	// Set timeout
+	// Set timeout. The 15s outer budget covers both the optional search
+	// step and the LLM call below.
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
+	// Optional search-grounding step: never fatal. Errors are logged and
+	// the flow falls back to LLM-only behavior.
+	var results []tavilyResult
+	if cfg.TavilyAPIKey != "" {
+		searchCtx, searchCancel := context.WithTimeout(ctx, time.Duration(cfg.TavilyTimeoutSeconds)*time.Second)
+		r, err := searchTavily(searchCtx, cfg, query)
+		searchCancel() // release budget before the LLM call
+		switch {
+		case err == nil:
+			results = r
+		case errors.Is(err, ErrTavilyNotConfigured):
+			b.logger.Debug("tavily not configured, skipping search grounding")
+		default:
+			b.logger.Warn("tavily search failed, falling back to LLM-only",
+				"error", err,
+				"base_url", cfg.TavilyBaseURL)
+		}
+	}
+
 	// Call Nebius Token Factory
-	messages := buildMessages(query, cfg.TofaSystemPrompt)
+	messages := buildMessages(query, cfg.TofaSystemPrompt, results)
 	answer, err := generateWithTokenFactory(ctx, cfg, messages)
 	if err != nil {
 		if errors.Is(err, ErrLLMNotConfigured) {
@@ -163,5 +195,6 @@ func (b *Bot) ask(ctx context.Context, s *discordgo.Session, m *discordgo.Messag
 		return
 	}
 
+	b.logger.Info("ask answered", "tavily_results", len(results))
 	s.ChannelMessageSendReply(m.ChannelID, answer, m.Reference())
 }

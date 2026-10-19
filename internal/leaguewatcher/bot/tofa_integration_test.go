@@ -35,7 +35,7 @@ func TestTokenFactoryIntegration(t *testing.T) {
 
 	// Test with Russian query using shared helper
 	query := "Сколько боссов в бвл?"
-	messages := buildMessages(query, cfg.TofaSystemPrompt)
+	messages := buildMessages(query, cfg.TofaSystemPrompt, nil)
 	answer, err := generateWithTokenFactory(ctx, cfg, messages)
 	if err != nil {
 		t.Fatalf("failed to call token factory: %v", err)

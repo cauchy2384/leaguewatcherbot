@@ -147,6 +147,16 @@ func TestConfigManager_Reload_Success(t *testing.T) {
 	is.Equal(cfg.TofaTemperature, float32(0.4))
 	is.Equal(cfg.TofaTopP, float32(0.95))
 	is.Equal(cfg.TofaMaxOutputTokens, int32(2048))
+
+	// Verify Tavily defaults (feature is off until TAVILY_API_KEY provided)
+	is.Equal(cfg.TavilyAPIKey, "")
+	is.Equal(cfg.TavilyBaseURL, "https://api.tavily.com")
+	is.Equal(cfg.TavilySearchDepth, "basic")
+	is.Equal(cfg.TavilyTopic, "general")
+	is.Equal(cfg.TavilyMaxResults, 3)
+	is.Equal(cfg.TavilyTimeoutSeconds, 5)
+	is.Equal(cfg.TavilyIncludeDomains, "")
+	is.Equal(cfg.TavilyExcludeDomains, "")
 }
 
 func TestConfigManager_Reload_TofaParams(t *testing.T) {
@@ -180,6 +190,41 @@ func TestConfigManager_Reload_TofaParams(t *testing.T) {
 	is.Equal(cfg.TofaTemperature, float32(0.7))
 	is.Equal(cfg.TofaTopP, float32(0.8))
 	is.Equal(cfg.TofaMaxOutputTokens, int32(1024))
+}
+
+func TestConfigManager_Reload_TavilyParams(t *testing.T) {
+	t.Parallel()
+	is := is.New(t)
+
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+		Level: slog.LevelError,
+	}))
+
+	secrets := createTestSecrets()
+	secrets["TAVILY_API_KEY"] = &doppler.SecretValue{Computed: stringPtr("tavily-key-abc")}
+	secrets["TAVILY_BASE_URL"] = &doppler.SecretValue{Computed: stringPtr("https://tavily.example.com")}
+	secrets["TAVILY_SEARCH_DEPTH"] = &doppler.SecretValue{Computed: stringPtr("advanced")}
+	secrets["TAVILY_TOPIC"] = &doppler.SecretValue{Computed: stringPtr("news")}
+	secrets["TAVILY_MAX_RESULTS"] = &doppler.SecretValue{Computed: stringPtr("7")}
+	secrets["TAVILY_TIMEOUT_SECONDS"] = &doppler.SecretValue{Computed: stringPtr("8")}
+	secrets["TAVILY_INCLUDE_DOMAINS"] = &doppler.SecretValue{Computed: stringPtr("a.com,b.org")}
+	secrets["TAVILY_EXCLUDE_DOMAINS"] = &doppler.SecretValue{Computed: stringPtr("spam.example")}
+
+	fakeProvider := newFakeSecretProvider(secrets)
+	cm := newConfigManagerWithProvider("test-token", logger, fakeProvider)
+
+	err := cm.Reload(context.Background())
+	is.NoErr(err)
+
+	cfg := cm.Get()
+	is.Equal(cfg.TavilyAPIKey, "tavily-key-abc")
+	is.Equal(cfg.TavilyBaseURL, "https://tavily.example.com")
+	is.Equal(cfg.TavilySearchDepth, "advanced")
+	is.Equal(cfg.TavilyTopic, "news")
+	is.Equal(cfg.TavilyMaxResults, 7)
+	is.Equal(cfg.TavilyTimeoutSeconds, 8)
+	is.Equal(cfg.TavilyIncludeDomains, "a.com,b.org")
+	is.Equal(cfg.TavilyExcludeDomains, "spam.example")
 }
 
 func TestConfigManager_Reload_MissingRequiredSecret(t *testing.T) {
@@ -315,6 +360,7 @@ func TestConfigManager_LogValueRedactsSecrets(t *testing.T) {
 		OwnerID:           "owner-should-not-appear",
 		TofaAPIKey:        "tofa-key-should-not-appear",
 		TofaModel:         "meta-llama/Llama-3.3-70B-Instruct",
+		TavilyAPIKey:      "tavily-key-should-not-appear",
 		Players:           []Player{},
 		KhaleesiThreshold: nil,
 	}
@@ -326,6 +372,7 @@ func TestConfigManager_LogValueRedactsSecrets(t *testing.T) {
 	is.True(!strings.Contains(logStr, "secret-token-should-not-appear"))
 	is.True(!strings.Contains(logStr, "owner-should-not-appear"))
 	is.True(!strings.Contains(logStr, "tofa-key-should-not-appear"))
+	is.True(!strings.Contains(logStr, "tavily-key-should-not-appear"))
 	is.True(strings.Contains(logStr, "REDACTED"))
 
 	// Non-secrets should be present
