@@ -20,8 +20,8 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"leaguewatcher/internal/leaguewatcher/bot/repository"
 	"leaguewatcher/internal/leaguewatcher/db"
+	"leaguewatcher/internal/leaguewatcher/pidorjson"
 	"log/slog"
 	"os"
 	"time"
@@ -130,13 +130,13 @@ func run(args []string, logger *slog.Logger) int {
 // trailing data after the closing brace is ignored with a warning.
 // json.Unmarshal would refuse the real prod file, which has trailing
 // whitespace/garbage from a previous bot-write bug.
-func loadPidors(path string) (*repository.Pidor, []string, error) {
+func loadPidors(path string) (*pidorjson.Pidor, []string, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, nil, fmt.Errorf("read: %w", err)
 	}
 	dec := json.NewDecoder(bytes.NewReader(data))
-	var p repository.Pidor
+	var p pidorjson.Pidor
 	if err := dec.Decode(&p); err != nil {
 		return nil, nil, fmt.Errorf("decode: %w", err)
 	}

@@ -20,7 +20,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"leaguewatcher/internal/leaguewatcher/bot/repository"
+	"leaguewatcher/internal/leaguewatcher/pidorjson"
 	"regexp"
 	"sort"
 	"time"
@@ -46,7 +46,7 @@ type planRow struct {
 // for entries that were skipped (bad input). Warnings do NOT cause
 // the run to fail — the choice is to import what's valid rather than
 // abort on a single corrupt entry.
-func computePlan(p *repository.Pidor) ([]planRow, []string) {
+func computePlan(p *pidorjson.Pidor) ([]planRow, []string) {
 	if p == nil || len(p.Stats) == 0 {
 		return nil, nil
 	}

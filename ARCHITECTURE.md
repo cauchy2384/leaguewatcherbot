@@ -189,16 +189,19 @@ External Systems:
 
 ## 4. Data Stores
 
-### 4.1 pidors.json
-**Type**: JSON file (persistent)
+### 4.1 pidors.json *(deprecated as of ADR-012)*
+**Type**: JSON file (was persistent)
 
-**Purpose**: Store "pidor of the day" game statistics
+**Status**: **Deprecated.** After ADR-012 the bot no longer reads or
+writes this file. Files remain on disk as historical artifacts.
+Cleanup deletion scheduled for a follow-up release (alongside
+`tools/pidors2csv` retirement).
 
-**Data Stored**:
+**Original purpose** (for archive reference):
 - Player name and selection count
 - Last selection timestamp (prevents duplicate selection same day)
 
-**Schema** (conceptual):
+**Schema** (conceptual, historical):
 ```json
 {
   "stats": [
@@ -255,13 +258,16 @@ External Systems:
 
 **Constraint**: `UNIQUE (channel_id, rolled_on)` — at most one winner per channel per day enforced at the storage layer (defence-in-depth against double-roll races).
 
-**Status**: Schema landed (migration 0002, ADR-011). Historical
-aggregates can be imported via `tools/pidors-backfill` (one-shot CLI,
-idempotent via `ON CONFLICT DO NOTHING` + deterministic synthetic
-dates per user within each channel). Bot code **does not yet read or
-write** this table — the consumer PR is tracked separately. See
-`adr/011-pidor-rolls-table.md` for the full schema and backfill
-rationale.
+**Status**: **In production use** since ADR-012. The bot reads and
+writes pidor commands (`!pidorday`, `!pidorstats`, `!pidorme`)
+directly against this table. 
+**The bot requires DATABASE_URL at startup**.
+
+**Backfill**: completed on 2026-10-19 via `tools/pidors-backfill`.
+Pre-merge parity test (`TestStatsParityAgainstJSON`) verified exact
+per-(channel, user) count match across all 6 channels (1527 lifetime
+rolls). Backup table `pidor_rolls_backup_20261019_205619_utc` retained
+on prod as a marker.
 
 ---
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"leaguewatcher/internal/leaguewatcher"
 	"leaguewatcher/internal/leaguewatcher/bot"
+	"leaguewatcher/internal/leaguewatcher/bot/repository"
 	"leaguewatcher/internal/leaguewatcher/db"
 	"leaguewatcher/internal/leaguewatcher/neonauth"
 	"leaguewatcher/internal/leaguewatcher/watcher"
@@ -13,6 +14,7 @@ import (
 	"path/filepath"
 	"syscall"
 	"time"
+	_ "time/tzdata" // bake IANA zones (Europe/Moscow) into the binary; no host tzdata dependency
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -60,22 +62,42 @@ func main() {
 	cfg := configMgr.Get()
 	logger.Info("Config loaded from Doppler", slog.Any("config", cfg))
 
-	// Connect to Neon PostgreSQL (optional - feature-flagged per ADR-009)
+	// Connect to Neon PostgreSQL. Required since ADR-012: pidor commands
+	// write to the pidor_rolls table and the bot refuses to start without a DB.
 	var pool *pgxpool.Pool
 	databaseURL := cfg.DatabaseURLPooled
 	if databaseURL == "" {
 		databaseURL = cfg.DatabaseURL
 	}
 	if databaseURL == "" {
-		logger.Info("DATABASE_URL not set, running in legacy JSON persistence mode")
-	} else {
-		pool, err = db.Connect(ctx, databaseURL, logger.With("component", "db"))
-		if err != nil {
-			logger.Error("Failed to connect to database", "error", err)
-			return
-		}
-		defer pool.Close()
+		logger.Error("DATABASE_URL is required (see ADR-012: pidor store moved to Postgres)")
+		return
 	}
+	pool, err = db.Connect(ctx, databaseURL, logger.With("component", "db"))
+	if err != nil {
+		logger.Error("Failed to connect to database", "error", err)
+		return
+	}
+	defer pool.Close()
+
+	// Pidor storage: Postgres only (ADR-012). Europe/Moscow is the canonical
+	// "today" zone, per ADR-011.
+	mskLoc, err := time.LoadLocation("Europe/Moscow")
+	if err != nil {
+		logger.Error("Failed to load Europe/Moscow timezone", "error", err)
+		return
+	}
+	pidorStore, err := repository.NewPidorStorePostgres(pool)
+	if err != nil {
+		logger.Error("Failed to construct pidor store", "error", err)
+		return
+	}
+	pidors, err := bot.NewPidors(pidorStore, mskLoc)
+	if err != nil {
+		logger.Error("Failed to construct pidor service", "error", err)
+		return
+	}
+	logger.Info("pidor store ready", "backend", "postgres", "location", mskLoc.String())
 
 	// Neon Auth reachability check (non-fatal per ADR-009)
 	if cfg.NeonAuthBaseURL != "" {
@@ -84,8 +106,8 @@ func main() {
 		} else {
 			logger.Info("Neon Auth reachable")
 		}
-	} else if databaseURL != "" {
-		logger.Warn("DATABASE_URL is set but NEON_AUTH_BASE_URL is empty; Neon Auth integration disabled")
+	} else {
+		logger.Warn("NEON_AUTH_BASE_URL is empty; Neon Auth integration disabled")
 	}
 
 	watcher := watcher.New(
@@ -103,13 +125,13 @@ func main() {
 		bot.Config{
 			Token:             cfg.DiscordToken,
 			OwnerID:           cfg.OwnerID,
-			PidorsFile:        filepath.Join(exPath, "pidors.json"),
 			LogFile:           filepath.Join(exPath, "log.json"),
 			ChannelID:         cfg.ChannelID,
 			KhaleesiThreshold: cfg.KhaleesiThreshold,
 		},
 		configMgr,
 		ch,
+		pidors,
 		logger.With("component", "bot"),
 	)
 	if err != nil {

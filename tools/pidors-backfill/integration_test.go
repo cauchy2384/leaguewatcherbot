@@ -3,8 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
-	"leaguewatcher/internal/leaguewatcher/bot/repository"
 	"leaguewatcher/internal/leaguewatcher/db"
+	"leaguewatcher/internal/leaguewatcher/pidorjson"
 	"log/slog"
 	"os"
 	"testing"
@@ -110,8 +110,8 @@ func TestBackfillIntegration(t *testing.T) {
 	}
 
 	// === Stage 2: apply backfill plan. Backup should capture prior rows. ===
-	p := &repository.Pidor{
-		Stats: map[string]map[string]repository.PidorStat{
+	p := &pidorjson.Pidor{
+		Stats: map[string]map[string]pidorjson.PidorStat{
 			channelID: {
 				"itu-alice": {Name: "Alice", Count: 4},
 				"itu-bob":   {Name: "Bob", Count: 2},

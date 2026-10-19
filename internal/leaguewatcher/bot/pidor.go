@@ -8,7 +8,6 @@ import (
 	"math/rand/v2"
 	"slices"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -17,98 +16,48 @@ import (
 
 const (
 	pidorStatsLen = 10
+
+	// msgDBUnavailable is the user-facing message for storage errors.
+	// Fail-closed: we do not roll or read stats when the DB is down.
+	msgDBUnavailable = "У меня проблемы с подключением к БД. Попробуй позже."
 )
 
 func (b *Bot) pidor(ctx context.Context, s *discordgo.Session, m *discordgo.MessageCreate) {
-
 	_, err := s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, ты пидор!", m.Author.Mention()))
 	if err != nil {
 		return
 	}
 }
 
+// Pidors wraps a PidorStore with bot-specific state: the timezone used
+// to derive "today" (per ADR-011: Europe/Moscow).
 type Pidors struct {
-	mu    sync.Mutex
-	store *repository.Pidor
+	store repository.PidorStore
+	loc   *time.Location
 }
 
-func NewPidors(filename string) (*Pidors, error) {
-
-	pidors := Pidors{
-		mu: sync.Mutex{},
+// NewPidors constructs a Pidors bound to the given store and location.
+// location must be non-nil — the caller is expected to have resolved
+// Europe/Moscow at startup and refused to boot on failure.
+func NewPidors(store repository.PidorStore, loc *time.Location) (*Pidors, error) {
+	if store == nil {
+		return nil, fmt.Errorf("repository.PidorStore is required")
 	}
-
-	var err error
-	pidors.store, err = repository.NewPidor(filename)
-	if err != nil {
-		return nil, err
+	if loc == nil {
+		return nil, fmt.Errorf("time.Location is required (per ADR-011 use Europe/Moscow)")
 	}
-
-	return &pidors, nil
+	return &Pidors{store: store, loc: loc}, nil
 }
 
-func (p *Pidors) syncStore() error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	return p.store.Sync()
+// today returns the current calendar date at UTC midnight in the
+// configured zone. Format consumed by Postgres as `::date`.
+func (p *Pidors) today() time.Time {
+	now := time.Now().In(p.loc)
+	return time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
 }
 
-func (p *Pidors) WasChosen(cID string, pidor *discordgo.Member) {
-	defer p.syncStore()
-
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	p.store.Called[cID] = time.Now()
-
-	stats, ok := p.store.Stats[cID]
-	if !ok {
-		stats = make(map[string]repository.PidorStat)
-	}
-
-	id := pidor.User.ID
-
-	s := stats[id]
-
-	s.Name = pidor.User.Username
-	s.Count = s.Count + 1
-
-	stats[id] = s
-
-	p.store.Stats[cID] = stats
-}
-
-func (p *Pidors) CanBeChosen(cID string) bool {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	t, ok := p.store.Called[cID]
-	if !ok {
-		return true
-	}
-
-	return t.YearDay() != time.Now().YearDay()
-}
-
-func (p *Pidors) Stats(cID string) map[string]repository.PidorStat {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	return p.store.Stats[cID]
-}
-
-func (b *Bot) pidorOfTheDay(_ context.Context, s *discordgo.Session, m *discordgo.MessageCreate) {
-
+func (b *Bot) pidorOfTheDay(ctx context.Context, s *discordgo.Session, m *discordgo.MessageCreate) {
 	cID := m.ChannelID
-
-	if !b.pidors.CanBeChosen(cID) {
-		_, err := s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, сегодня уже выбирали, пидрила!", m.Author.Mention()))
-		if err != nil {
-			return
-		}
-		return
-	}
 
 	c, err := s.State.Channel(cID)
 	if err != nil {
@@ -122,58 +71,125 @@ func (b *Bot) pidorOfTheDay(_ context.Context, s *discordgo.Session, m *discordg
 		return
 	}
 
-	var pidors []*discordgo.Member
-	for _, m := range members {
-		if m.User.Bot {
+	var candidates []*discordgo.Member
+	for _, mem := range members {
+		if mem.User.Bot {
 			continue
 		}
-		pidors = append(pidors, m)
+		candidates = append(candidates, mem)
+	}
+	if len(candidates) == 0 {
+		b.logger.Warn("no eligible members for pidorday", "channel", cID)
+		return
 	}
 
-	randomIndex := rand.IntN(len(pidors))
-	pidor := pidors[randomIndex]
-	b.logger.Debug("pidor of the day", "pidor", pidor)
+	winner := candidates[rand.IntN(len(candidates))]
+	b.logger.Debug("pidor of the day candidate", "user", winner.User.Username)
+
+	// Race-safe reservation. The DB's UNIQUE(channel_id, rolled_on)
+	// guarantees only one winner per (channel, day) globally; we
+	// don't need a "check first" round trip.
+	won, err := b.pidors.store.TryChooseToday(ctx, cID, winner.User.ID, winner.User.Username, b.pidors.today())
+	if err != nil {
+		b.logger.Error("pidor TryChooseToday failed", "channel", cID, "error", err)
+		_, _ = s.ChannelMessageSend(cID, msgDBUnavailable)
+		return
+	}
+	if !won {
+		_, err := s.ChannelMessageSend(cID,
+			fmt.Sprintf("%s, сегодня уже выбирали, пидрила!", m.Author.Mention()))
+		if err != nil {
+			return
+		}
+		return
+	}
 
 	_, err = s.ChannelMessageSend(c.ID,
 		fmt.Sprintf(
 			"Пидор дня сегодня... %s! %s",
-			pidor.Mention(),
+			winner.Mention(),
 			emoji.Sprintf(":rooster:"),
 		))
 	if err != nil {
 		return
 	}
-
-	b.pidors.WasChosen(cID, pidor)
 }
 
-func (b *Bot) pidorStats(_ context.Context, s *discordgo.Session, m *discordgo.MessageCreate) {
-
-	stats := b.pidors.Stats(m.ChannelID)
-
-	type Pidor struct {
-		Name  string
-		Count int
+func (b *Bot) pidorStats(ctx context.Context, s *discordgo.Session, m *discordgo.MessageCreate) {
+	stats, err := b.pidors.store.Stats(ctx, m.ChannelID)
+	if err != nil {
+		b.logger.Error("pidor Stats failed", "channel", m.ChannelID, "error", err)
+		_, _ = s.ChannelMessageSend(m.ChannelID, msgDBUnavailable)
+		return
 	}
-	pidors := make([]Pidor, 0, len(stats))
+	b.sendPidorStatsRender(s, m.ChannelID, stats)
+}
+
+func (b *Bot) pidorPersonalStats(ctx context.Context, s *discordgo.Session, m *discordgo.MessageCreate) {
+	stats, err := b.pidors.store.Stats(ctx, m.ChannelID)
+	if err != nil {
+		b.logger.Error("pidor Stats failed", "channel", m.ChannelID, "error", err)
+		_, _ = s.ChannelMessageSend(m.ChannelID, msgDBUnavailable)
+		return
+	}
+
+	v, ok := stats[m.Author.ID]
+	if !ok {
+		_, err := s.ChannelMessageSend(
+			m.ChannelID,
+			fmt.Sprintf("%s ни разу не пидор!", m.Author.Mention()),
+		)
+		if err != nil {
+			return
+		}
+		return
+	}
+
+	pidors := sortPidors(stats)
+	rating := 0
+	for i, pidor := range pidors {
+		if pidor.Name == v.Name {
+			rating = i + 1
+			break
+		}
+	}
+
+	_, err = s.ChannelMessageSend(
+		m.ChannelID,
+		fmt.Sprintf("%s - пидор #%d, целых %d раз!", m.Author.Mention(), rating, v.Count),
+	)
+}
+
+// pidorRow is a flattened, sortable view of one user's lifetime counter.
+type pidorRow struct {
+	Name  string
+	Count int
+}
+
+// sortPidors orders the map by Count DESC, then by Name ASC for
+// deterministic tie-breaks.
+func sortPidors(stats map[string]repository.PidorStat) []pidorRow {
+	rows := make([]pidorRow, 0, len(stats))
 	for _, s := range stats {
-		pidors = append(pidors, Pidor{
-			Name:  s.Name,
-			Count: s.Count,
-		})
+		rows = append(rows, pidorRow{Name: s.Name, Count: s.Count})
 	}
-	slices.SortFunc(pidors, func(a, b Pidor) int {
+	slices.SortFunc(rows, func(a, b pidorRow) int {
 		if a.Count != b.Count {
-			return cmp.Compare(b.Count, a.Count) // Reverse for descending
+			return cmp.Compare(b.Count, a.Count)
 		}
 		return cmp.Compare(a.Name, b.Name)
 	})
+	return rows
+}
 
+// sendPidorStatsRender is the shared renderer for the top-N view used
+// by both !pidorstats and (indirectly) other commands.
+func (b *Bot) sendPidorStatsRender(s *discordgo.Session, channelID string, stats map[string]repository.PidorStat) {
+	pidors := sortPidors(stats)
 	total := 0
-	for _, pidor := range pidors {
-		total += pidor.Count
+	for _, p := range pidors {
+		total += p.Count
 	}
-
 	if len(pidors) > pidorStatsLen {
 		pidors = pidors[:pidorStatsLen]
 	}
@@ -188,59 +204,8 @@ func (b *Bot) pidorStats(_ context.Context, s *discordgo.Session, m *discordgo.M
 		}
 	}
 
-	_, err := s.ChannelMessageSend(m.ChannelID, sb.String())
+	_, err := s.ChannelMessageSend(channelID, sb.String())
 	if err != nil {
 		return
 	}
-}
-
-func (b *Bot) pidorPersonalStats(ctx context.Context, s *discordgo.Session, m *discordgo.MessageCreate) {
-	stats := b.pidors.Stats(m.ChannelID)
-
-	v, ok := stats[m.Author.ID]
-	if !ok {
-		_, err := s.ChannelMessageSend(
-			m.ChannelID,
-			fmt.Sprintf("%s ни разу не пидор!", m.Author.Mention()),
-		)
-		if err != nil {
-			return
-		}
-		return
-	}
-
-	type Pidor struct {
-		Name  string
-		Count int
-	}
-	pidors := make([]Pidor, 0, len(stats))
-	for _, s := range stats {
-		pidors = append(pidors, Pidor{
-			Name:  s.Name,
-			Count: s.Count,
-		})
-	}
-	slices.SortFunc(pidors, func(a, b Pidor) int {
-		if a.Count != b.Count {
-			return cmp.Compare(b.Count, a.Count) // Reverse for descending
-		}
-		return cmp.Compare(a.Name, b.Name)
-	})
-
-	rating := 0
-	for i, pidor := range pidors {
-		if pidor.Name == v.Name {
-			rating = i + 1
-			break
-		}
-	}
-
-	_, err := s.ChannelMessageSend(
-		m.ChannelID,
-		fmt.Sprintf("%s - пидор #%d, целых %d раз!", m.Author.Mention(), rating, v.Count),
-	)
-	if err != nil {
-		return
-	}
-
 }
