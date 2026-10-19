@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"leaguewatcher/internal/leaguewatcher/bot/repository"
+	"leaguewatcher/internal/leaguewatcher/pidorjson"
 	"log"
 	"os"
 	"strconv"
@@ -23,7 +23,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	var pidors repository.Pidor
+	var pidors pidorjson.Pidor
 	err = json.Unmarshal(data, &pidors)
 	if err != nil {
 		log.Fatal(err)

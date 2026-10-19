@@ -33,7 +33,6 @@ type Bot struct {
 type Config struct {
 	Token             string
 	OwnerID           string
-	PidorsFile        string
 	LogFile           string
 	ChannelID         string
 	KhaleesiThreshold *int
@@ -44,21 +43,28 @@ func (cfg Config) LogValue() slog.Value {
 	return slog.GroupValue(
 		slog.String("token", "***REDACTED***"),
 		slog.String("owner_id", "***REDACTED***"),
-		slog.String("pidors_file", cfg.PidorsFile),
 		slog.String("log_file", cfg.LogFile),
 		slog.String("channel_id", cfg.ChannelID),
 		slog.Any("khaleesi_threshold", cfg.KhaleesiThreshold),
 	)
 }
 
-func New(cfg Config, configMgr *leaguewatcher.ConfigManager, matchesCh chan leaguewatcher.Match, logger *slog.Logger) (*Bot, error) {
+// New constructs a Bot. Test packages may pass a fake Pidors via
+// NewWithPidors; production callers should use New which requires a
+// Postgres-backed pidor store (see ADR-012).
+func New(
+	cfg Config,
+	configMgr *leaguewatcher.ConfigManager,
+	matchesCh chan leaguewatcher.Match,
+	pidors *Pidors,
+	logger *slog.Logger,
+) (*Bot, error) {
+	if pidors == nil {
+		return nil, fmt.Errorf("pidors store is required (see ADR-012)")
+	}
 	logger.Info("bot created", slog.Any("config", cfg))
 
-	pidors, err := NewPidors(cfg.PidorsFile)
-	if err != nil {
-		return nil, err
-	}
-
+	var err error
 	bot := Bot{
 		cfg:       cfg,
 		configMgr: configMgr,

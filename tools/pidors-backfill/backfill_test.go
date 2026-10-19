@@ -1,7 +1,7 @@
 package main
 
 import (
-	"leaguewatcher/internal/leaguewatcher/bot/repository"
+	"leaguewatcher/internal/leaguewatcher/pidorjson"
 	"strings"
 	"testing"
 	"time"
@@ -23,7 +23,7 @@ func TestComputePlan(t *testing.T) {
 
 	testCases := []struct {
 		name              string
-		input             *repository.Pidor
+		input             *pidorjson.Pidor
 		wantRows          []planRow
 		wantWarningSubstr []string
 	}{
@@ -34,12 +34,12 @@ func TestComputePlan(t *testing.T) {
 		},
 		{
 			name:     "empty stats returns empty plan",
-			input:    &repository.Pidor{Stats: map[string]map[string]repository.PidorStat{}},
+			input:    &pidorjson.Pidor{Stats: map[string]map[string]pidorjson.PidorStat{}},
 			wantRows: nil,
 		},
 		{
 			name: "one channel, one user, epoch date",
-			input: &repository.Pidor{Stats: map[string]map[string]repository.PidorStat{
+			input: &pidorjson.Pidor{Stats: map[string]map[string]pidorjson.PidorStat{
 				"chan1": {"u1": {Name: "alice", Count: 5}},
 			}},
 			wantRows: []planRow{
@@ -49,7 +49,7 @@ func TestComputePlan(t *testing.T) {
 		},
 		{
 			name: "one channel, three users get sequential dates in lexicographic order",
-			input: &repository.Pidor{Stats: map[string]map[string]repository.PidorStat{
+			input: &pidorjson.Pidor{Stats: map[string]map[string]pidorjson.PidorStat{
 				"chan1": {
 					"u1": {Name: "alice", Count: 3},
 					"u9": {Name: "carol", Count: 7},
@@ -64,7 +64,7 @@ func TestComputePlan(t *testing.T) {
 		},
 		{
 			name: "two channels each get their own date sequence from epoch",
-			input: &repository.Pidor{Stats: map[string]map[string]repository.PidorStat{
+			input: &pidorjson.Pidor{Stats: map[string]map[string]pidorjson.PidorStat{
 				"chanA": {
 					"u1": {Name: "alice", Count: 1},
 					"u2": {Name: "bob", Count: 2},
@@ -81,7 +81,7 @@ func TestComputePlan(t *testing.T) {
 		},
 		{
 			name: "zero-count user is skipped with warning",
-			input: &repository.Pidor{Stats: map[string]map[string]repository.PidorStat{
+			input: &pidorjson.Pidor{Stats: map[string]map[string]pidorjson.PidorStat{
 				"chan1": {
 					"u1": {Name: "alice", Count: 3},
 					"u2": {Name: "ghost", Count: 0},
@@ -96,7 +96,7 @@ func TestComputePlan(t *testing.T) {
 		},
 		{
 			name: "negative-count user is skipped with warning",
-			input: &repository.Pidor{Stats: map[string]map[string]repository.PidorStat{
+			input: &pidorjson.Pidor{Stats: map[string]map[string]pidorjson.PidorStat{
 				"chan1": {
 					"u1": {Name: "alice", Count: 1},
 					"u2": {Name: "neg", Count: -5},
@@ -109,7 +109,7 @@ func TestComputePlan(t *testing.T) {
 		},
 		{
 			name: "empty-name user is skipped with warning",
-			input: &repository.Pidor{Stats: map[string]map[string]repository.PidorStat{
+			input: &pidorjson.Pidor{Stats: map[string]map[string]pidorjson.PidorStat{
 				"chan1": {
 					"u1": {Name: "alice", Count: 3},
 					"u2": {Name: "", Count: 7},
@@ -122,7 +122,7 @@ func TestComputePlan(t *testing.T) {
 		},
 		{
 			name: "non-numeric user ids still sort lexicographically",
-			input: &repository.Pidor{Stats: map[string]map[string]repository.PidorStat{
+			input: &pidorjson.Pidor{Stats: map[string]map[string]pidorjson.PidorStat{
 				"chan1": {
 					"zebra": {Name: "z", Count: 1},
 					"alpha": {Name: "a", Count: 2},
@@ -137,7 +137,7 @@ func TestComputePlan(t *testing.T) {
 		},
 		{
 			name: "deterministic across runs (maps do not shuffle the plan)",
-			input: &repository.Pidor{Stats: map[string]map[string]repository.PidorStat{
+			input: &pidorjson.Pidor{Stats: map[string]map[string]pidorjson.PidorStat{
 				"chanX": {
 					"u9": {Name: "nine", Count: 90},
 					"u1": {Name: "one", Count: 10},
