@@ -264,3 +264,12 @@ The most likely follow-ups, in rough priority order:
 | Date | Change |
 |------|--------|
 | 2026-10-19 | Initial version, marked Accepted. |
+| 2026-10-19 | Added Doppler-token configuration fallback. The migrator now
+  resolves `DATABASE_URL` via three paths in order: `-db` flag,
+  `DATABASE_URL` env, then `DOPPLER_TOKEN` env which triggers a
+  Doppler API lookup (project=`leaguewatcherbot`, config=`prd`).
+  This matches the bot's existing `ConfigManager` pattern (ADR-004)
+  and lets operators run `go run tools/migrator/main.go up` directly
+  when `DOPPLER_TOKEN` is in the environment, without requiring the
+  Doppler CLI. Existing `doppler run --` workflows are unchanged
+  (`DATABASE_URL` is injected by the CLI and wins by precedence). |

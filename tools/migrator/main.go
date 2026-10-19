@@ -3,14 +3,22 @@
 // startup path) so schema changes happen only as deliberate operator
 // actions.
 //
-// Configuration: env vars only.
+// Configuration resolution order (first match wins):
 //
-//	DATABASE_URL        (required) Direct (unpooled) Neon connection string
-//	MIGRATOR_TEST_DSN   (test-only) Used by integration tests; not for ops
+//	-db URL             explicit flag override
+//	DATABASE_URL        direct (unpooled) Neon connection string in env
+//	DOPPLER_TOKEN       fetches DATABASE_URL from Doppler (project=leaguewatcherbot, config=prd)
 //
-// Run against production via Doppler:
+// Run against production via Doppler CLI:
 //
 //	doppler run -- go run tools/migrator/main.go up
+//
+// Or with DOPPLER_TOKEN exported (no Doppler CLI required):
+//
+//	export DOPPLER_TOKEN=dp.st.…
+//	go run tools/migrator/main.go up
+//
+// MIGRATOR_TEST_DSN is used by integration tests; never for ops.
 package main
 
 import (
@@ -70,17 +78,14 @@ func run(args []string, logger *slog.Logger) int {
 		return exitCLIMisuse
 	}
 
-	dbURL := *dbURLFlag
-	if dbURL == "" {
-		dbURL = os.Getenv("DATABASE_URL")
-	}
-	if dbURL == "" {
-		logger.Error("DATABASE_URL is required (or pass -db)")
-		return exitConfigError
-	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
+
+	dbURL, err := newDatabaseResolver(*dbURLFlag).Resolve(ctx)
+	if err != nil {
+		logger.Error("failed to resolve DATABASE_URL", "error", err)
+		return exitConfigError
+	}
 
 	all, err := db.LoadMigrations()
 	if err != nil {
@@ -210,13 +215,14 @@ Usage:
   migrator version     print the highest applied version (0 if none)
 
 Flags:
-  -db URL     override $DATABASE_URL
+  -db URL     override $DATABASE_URL (ad-hoc use only)
   -v          verbose logging
 
-Configuration:
-  DATABASE_URL    (required) direct Neon connection string, e.g.
-                  postgres://user:pass@host/db?sslmode=require
-                  Use "doppler run --" to inject from Doppler.
+Configuration resolution:
+  1. -db flag
+  2. $DATABASE_URL        (use "doppler run --" to inject via CLI)
+  3. $DOPPLER_TOKEN       migrator fetches DATABASE_URL from Doppler
+                          (project=leaguewatcherbot, config=prd)
 
 See ADR-010 for design rationale.
 `)
