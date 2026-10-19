@@ -105,7 +105,7 @@ func run(args []string, logger *slog.Logger) int {
 	}
 	logger.Info("snapshotting pidor_rolls before truncate", "backup_table", name)
 
-	inserted, truncated, err := applyPlan(ctx, pool, name, rows)
+	inserted, truncated, err := applyPlan(ctx, pool, "pidor_rolls", name, rows)
 	if err != nil {
 		logger.Error("backfill failed", "error", err, "backup_table", name)
 		return exitApplyError

@@ -105,11 +105,6 @@ func computePlan(p *repository.Pidor) ([]planRow, []string) {
 	return rows, warnings
 }
 
-const insertSQL = `
-INSERT INTO pidor_rolls (channel_id, user_id, user_name, rolled_on, times_rolled)
-VALUES ($1, $2, $3, $4, $5)
-`
-
 // backupNameFormat is the date-time format used for the snapshot backup
 // table name. UTC, sortable, no special characters — safe to interpolate
 // into SQL as an identifier.
@@ -127,17 +122,25 @@ func defaultBackupName(now time.Time) string {
 // accidentally passing user-controlled strings in the future.
 var safeIdentifierPattern = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
 
-// applyPlan snapshots pidor_rolls into a timestamped backup table,
-// truncates pidor_rolls, then inserts every planned row, all within
-// a single transaction. Returns the number of rows inserted.
+// applyPlan snapshots the source table into a timestamped backup,
+// truncates the source, then inserts every planned row, all within
+// a single transaction. Returns the number of rows inserted plus the
+// number of rows that were truncated (for operator visibility).
 //
-// Because the table is empty at insert time, every planned row
+// `sourceTable` is normally "pidor_rolls" but is parameterised so
+// the integration test can target an isolated mirror table instead
+// of production data. It is validated by safeIdentifierPattern
+// before being interpolated into SQL.
+//
+// Because the source is empty at insert time, every planned row
 // guarantees insertion; this function does not return a "skipped"
-// counter. The number of rows truncated from the main table
-// is returned for operator visibility / sanity checks.
+// counter.
 //
 // On error everything rolls back: no backup, no truncate, no rows.
-func applyPlan(ctx context.Context, pool *pgxpool.Pool, backupName string, rows []planRow) (inserted, truncated int, err error) {
+func applyPlan(ctx context.Context, pool *pgxpool.Pool, sourceTable, backupName string, rows []planRow) (inserted, truncated int, err error) {
+	if !safeIdentifierPattern.MatchString(sourceTable) {
+		return 0, 0, fmt.Errorf("source table %q is not a safe identifier", sourceTable)
+	}
 	if !safeIdentifierPattern.MatchString(backupName) {
 		return 0, 0, fmt.Errorf("backup name %q is not a safe identifier", backupName)
 	}
@@ -152,27 +155,32 @@ func applyPlan(ctx context.Context, pool *pgxpool.Pool, backupName string, rows 
 		}
 	}()
 
-	// 1. Snapshot existing pidor_rolls into a backup table.
+	// 1. Snapshot existing source table into a backup table.
 	//    Copies data + column types, deliberately NOT the constraints —
 	//    the backup is a raw data snapshot for recovery. Restore means
-	//    truncating pidor_rolls and re-inserting from the backup.
-	createBackupSQL := fmt.Sprintf("CREATE TABLE %s AS TABLE pidor_rolls", backupName)
+	//    truncating source and re-inserting from the backup.
+	createBackupSQL := fmt.Sprintf("CREATE TABLE %s AS TABLE %s", backupName, sourceTable)
 	if _, err := tx.Exec(ctx, createBackupSQL); err != nil {
 		return 0, 0, fmt.Errorf("create backup %q: %w", backupName, err)
 	}
 
-	// 2. Truncate the main table so inserts are guaranteed to land.
+	// 2. Truncate the source table so inserts are guaranteed to land.
 	//    Capture the previous row count first for operator visibility.
-	if err := tx.QueryRow(ctx, "SELECT count(*) FROM pidor_rolls").Scan(&truncated); err != nil {
+	if err := tx.QueryRow(ctx,
+		fmt.Sprintf("SELECT count(*) FROM %s", sourceTable)).Scan(&truncated); err != nil {
 		return 0, 0, fmt.Errorf("count previous rows: %w", err)
 	}
-	if _, err := tx.Exec(ctx, "TRUNCATE TABLE pidor_rolls"); err != nil {
+	if _, err := tx.Exec(ctx,
+		fmt.Sprintf("TRUNCATE TABLE %s", sourceTable)); err != nil {
 		return 0, 0, fmt.Errorf("truncate: %w", err)
 	}
 
-	// 3. Insert all planned rows.
+	// 3. Insert all planned rows into the source table.
+	insertTarget := fmt.Sprintf(
+		"INSERT INTO %s (channel_id, user_id, user_name, rolled_on, times_rolled) VALUES ($1,$2,$3,$4,$5)",
+		sourceTable)
 	for _, r := range rows {
-		if _, err := tx.Exec(ctx, insertSQL,
+		if _, err := tx.Exec(ctx, insertTarget,
 			r.ChannelID, r.UserID, r.UserName, r.RolledOn, r.TimesRolled); err != nil {
 			return 0, 0, fmt.Errorf("insert channel=%s user=%s rolled_on=%s: %w",
 				r.ChannelID, r.UserID, r.RolledOn.Format("2006-01-02"), err)
