@@ -25,14 +25,15 @@ func TestBot(t *testing.T) {
 	}
 
 	ch := make(chan leaguewatcher.Match)
-	// Construct a Pidors with a nil store and an arbitrary location. This
-	// test only exercises Run(); it does NOT issue any pidor command, so
-	// the store is not consulted.
+	// This test only exercises Run(); it does not issue any pidor
+	// command, so the fakePidorStore (defined in pidor_test.go) suffices.
+	pidors, err := NewPidors(&fakePidorStore{}, time.UTC)
+	is.NoErr(err)
 
 	bot, err := New(Config{
 		Token:   token,
 		OwnerID: "cauchy2384",
-	}, nil, ch, &Pidors{store: nil, loc: time.UTC}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	}, nil, ch, pidors, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	is.NoErr(err)
 
 	_, err = bot.Run(ctx)

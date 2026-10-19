@@ -106,8 +106,8 @@ func main() {
 		} else {
 			logger.Info("Neon Auth reachable")
 		}
-	} else if databaseURL != "" {
-		logger.Warn("DATABASE_URL is set but NEON_AUTH_BASE_URL is empty; Neon Auth integration disabled")
+	} else {
+		logger.Warn("NEON_AUTH_BASE_URL is empty; Neon Auth integration disabled")
 	}
 
 	watcher := watcher.New(

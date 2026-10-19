@@ -42,6 +42,9 @@ func TestPidorStorePostgresIntegration(t *testing.T) {
 	defer pool.Close()
 
 	table := fmt.Sprintf("pidor_rolls_itest_%d", time.Now().UnixNano())
+	if !pidorTableNamePattern.MatchString(table) {
+		t.Fatalf("generated table name %q does not match safety pattern", table)
+	}
 
 	// Defers run LIFO: pool.Close registered FIRST so it executes LAST.
 	defer func() {

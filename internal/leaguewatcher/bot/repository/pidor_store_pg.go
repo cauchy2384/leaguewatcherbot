@@ -39,7 +39,6 @@ import (
 type PidorStorePostgres struct {
 	pool  *pgxpool.Pool
 	table string
-	now   func() time.Time // injectable for time-travel tests
 }
 
 // PidorStoreOption is a functional option for configuring
@@ -57,13 +56,6 @@ func WithPidorTable(name string) PidorStoreOption {
 	return func(s *PidorStorePostgres) { s.table = name }
 }
 
-// withClock injects a fake clock. Test-only; production callers should
-// not set this option. Not exported because tests live in the same
-// package.
-func withClock(now func() time.Time) PidorStoreOption {
-	return func(s *PidorStorePostgres) { s.now = now }
-}
-
 // NewPidorStorePostgres constructs a Postgres-backed store. Returns
 // an error if the pool is nil — silently dropping pidor commands is
 // worse than failing bot startup.
@@ -74,7 +66,6 @@ func NewPidorStorePostgres(pool *pgxpool.Pool, opts ...PidorStoreOption) (*Pidor
 	s := &PidorStorePostgres{
 		pool:  pool,
 		table: "pidor_rolls",
-		now:   time.Now,
 	}
 	for _, opt := range opts {
 		opt(s)
