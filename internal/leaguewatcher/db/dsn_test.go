@@ -1,21 +1,22 @@
-package main
+package db
 
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/matryer/is"
 )
 
-func TestDatabaseResolver_Resolve(t *testing.T) {
+func TestDSNResolver_Resolve(t *testing.T) {
 	t.Parallel()
 
 	errBoom := errors.New("doppler api unreachable")
 
 	testCases := []struct {
 		name             string
-		flagVal          string
+		explicit         string
 		env              map[string]string
 		dopplerResult    string
 		dopplerErr       error
@@ -25,18 +26,18 @@ func TestDatabaseResolver_Resolve(t *testing.T) {
 		wantDopplerCalls int
 	}{
 		{
-			name:    "flag wins over env and Doppler",
-			flagVal: "postgres://flag-dsn",
+			name:     "explicit wins over env and Doppler",
+			explicit: "postgres://explicit-dsn",
 			env: map[string]string{
 				"DATABASE_URL":  "postgres://env-dsn",
 				"DOPPLER_TOKEN": "tok",
 			},
-			wantURL:          "postgres://flag-dsn",
+			wantURL:          "postgres://explicit-dsn",
 			wantDopplerCalls: 0,
 		},
 		{
-			name:    "env DATABASE_URL wins over Doppler",
-			flagVal: "",
+			name:     "env DATABASE_URL wins over Doppler",
+			explicit: "",
 			env: map[string]string{
 				"DATABASE_URL":  "postgres://env-dsn",
 				"DOPPLER_TOKEN": "tok",
@@ -45,8 +46,8 @@ func TestDatabaseResolver_Resolve(t *testing.T) {
 			wantDopplerCalls: 0,
 		},
 		{
-			name:    "falls through to Doppler when env not set",
-			flagVal: "",
+			name:     "falls through to Doppler when env not set",
+			explicit: "",
 			env: map[string]string{
 				"DOPPLER_TOKEN": "tok",
 			},
@@ -55,8 +56,8 @@ func TestDatabaseResolver_Resolve(t *testing.T) {
 			wantDopplerCalls: 1,
 		},
 		{
-			name:    "env DATABASE_URL empty string is treated as unset",
-			flagVal: "",
+			name:     "env DATABASE_URL empty string is treated as unset",
+			explicit: "",
 			env: map[string]string{
 				"DATABASE_URL":  "",
 				"DOPPLER_TOKEN": "tok",
@@ -66,8 +67,8 @@ func TestDatabaseResolver_Resolve(t *testing.T) {
 			wantDopplerCalls: 1,
 		},
 		{
-			name:    "Doppler returns error is wrapped",
-			flagVal: "",
+			name:     "Doppler returns error is wrapped",
+			explicit: "",
 			env: map[string]string{
 				"DOPPLER_TOKEN": "tok",
 			},
@@ -76,8 +77,8 @@ func TestDatabaseResolver_Resolve(t *testing.T) {
 			wantDopplerCalls: 1,
 		},
 		{
-			name:    "Doppler returns empty DATABASE_URL",
-			flagVal: "",
+			name:     "Doppler returns empty DATABASE_URL",
+			explicit: "",
 			env: map[string]string{
 				"DOPPLER_TOKEN": "tok",
 			},
@@ -87,18 +88,18 @@ func TestDatabaseResolver_Resolve(t *testing.T) {
 		},
 		{
 			name:             "no resolution path available",
-			flagVal:          "",
+			explicit:         "",
 			env:              map[string]string{},
-			wantErrIs:        ErrNoDatabaseURL,
+			wantErrIs:        ErrNoDSN,
 			wantDopplerCalls: 0,
 		},
 		{
-			name:    "DOPPLER_TOKEN set to empty string is treated as unset",
-			flagVal: "",
+			name:     "DOPPLER_TOKEN set to empty string is treated as unset",
+			explicit: "",
 			env: map[string]string{
 				"DOPPLER_TOKEN": "",
 			},
-			wantErrIs:        ErrNoDatabaseURL,
+			wantErrIs:        ErrNoDSN,
 			wantDopplerCalls: 0,
 		},
 	}
@@ -120,9 +121,9 @@ func TestDatabaseResolver_Resolve(t *testing.T) {
 				return v, ok
 			}
 
-			r := newDatabaseResolver(tt.flagVal,
-				withEnvLookup(stubEnv),
-				withDopplerLookup(stubDoppler))
+			r := NewDSNResolver(tt.explicit,
+				WithEnvLookup(stubEnv),
+				WithDopplerLookup(stubDoppler))
 
 			got, err := r.Resolve(context.Background())
 
@@ -131,7 +132,7 @@ func TestDatabaseResolver_Resolve(t *testing.T) {
 				is.True(errors.Is(err, tt.wantErrIs)) // errors.Is unwrap must work
 			case tt.wantErrContains != "":
 				is.True(err != nil) // expected error
-				is.True(errContains(err.Error(), tt.wantErrContains))
+				is.True(strings.Contains(err.Error(), tt.wantErrContains))
 			default:
 				is.NoErr(err)
 				is.Equal(got, tt.wantURL)
@@ -140,18 +141,4 @@ func TestDatabaseResolver_Resolve(t *testing.T) {
 			is.Equal(dopplerCalls, tt.wantDopplerCalls)
 		})
 	}
-}
-
-// errContains is a tiny strings.Contains that keeps test assertions readable
-// without importing strings just for this.
-func errContains(haystack, needle string) bool {
-	if needle == "" {
-		return true
-	}
-	for i := 0; i+len(needle) <= len(haystack); i++ {
-		if haystack[i:i+len(needle)] == needle {
-			return true
-		}
-	}
-	return false
 }
