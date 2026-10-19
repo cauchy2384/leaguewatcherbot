@@ -1,3 +1,10 @@
+# [1.7.0](https://github.com/cauchy2384/leaguewatcherbot/compare/v1.6.2...v1.7.0) (2026-10-19)
+
+
+### Features
+
+* migrate !ask from Vertex AI to Nebius Token Factory ([#21](https://github.com/cauchy2384/leaguewatcherbot/issues/21)) ([9ed7ac6](https://github.com/cauchy2384/leaguewatcherbot/commit/9ed7ac646f0a1de178006d672c28e5ecfcb08457))
+
 ## [1.6.2](https://github.com/cauchy2384/leaguewatcherbot/compare/v1.6.1...v1.6.2) (2026-10-12)
 
 
