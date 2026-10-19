@@ -51,19 +51,38 @@ type tofaChatResponse struct {
 	} `json:"error,omitempty"`
 }
 
-// generateWithTokenFactory calls Nebius Token Factory with the given query
-// and returns the assistant reply. The API is OpenAI-compatible; we use the
-// stdlib net/http client to avoid pulling a third-party SDK.
-func generateWithTokenFactory(ctx context.Context, cfg leaguewatcher.Config, query string) (string, error) {
+// buildMessages assembles the OpenAI-compatible message slice for a Q&A
+// turn. If web-search results are provided, they are appended to the system
+// prompt as a numbered context block so the LLM can ground its answer.
+func buildMessages(query, basePrompt string, results []tavilyResult) []tofaMessage {
+	msgs := make([]tofaMessage, 0, 2)
+	system := basePrompt
+	if len(results) > 0 {
+		var sb strings.Builder
+		sb.WriteString(system)
+		if system != "" {
+			sb.WriteString("\n\n")
+		}
+		sb.WriteString("Контекст из поиска (используй для ответа, но не упоминай явно):\n")
+		for i, r := range results {
+			fmt.Fprintf(&sb, "%d. %s — %s\n%s\n\n", i+1, r.Title, r.URL, r.Content)
+		}
+		system = sb.String()
+	}
+	if system != "" {
+		msgs = append(msgs, tofaMessage{Role: "system", Content: system})
+	}
+	msgs = append(msgs, tofaMessage{Role: "user", Content: query})
+	return msgs
+}
+
+// generateWithTokenFactory calls Nebius Token Factory with the given
+// message slice and returns the assistant reply. The API is OpenAI-compatible;
+// we use the stdlib net/http client to avoid pulling a third-party SDK.
+func generateWithTokenFactory(ctx context.Context, cfg leaguewatcher.Config, messages []tofaMessage) (string, error) {
 	if cfg.TofaAPIKey == "" || cfg.TofaModel == "" {
 		return "", ErrLLMNotConfigured
 	}
-
-	messages := make([]tofaMessage, 0, 2)
-	if cfg.TofaSystemPrompt != "" {
-		messages = append(messages, tofaMessage{Role: "system", Content: cfg.TofaSystemPrompt})
-	}
-	messages = append(messages, tofaMessage{Role: "user", Content: query})
 
 	reqBody := tofaChatRequest{
 		Model:       cfg.TofaModel,
@@ -130,12 +149,34 @@ func (b *Bot) ask(ctx context.Context, s *discordgo.Session, m *discordgo.Messag
 	// Get config (hot-reload via ConfigManager)
 	cfg := b.configMgr.Get()
 
-	// Set timeout
-	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	// Set timeout. The outer budget covers both the optional search
+	// step and the LLM call below. Configurable via ASK_TIMEOUT_SECONDS;
+	// 15s matches the historical hardcoded value.
+	ctx, cancel := context.WithTimeout(ctx, time.Duration(cfg.AskTimeoutSeconds)*time.Second)
 	defer cancel()
 
+	// Optional search-grounding step: never fatal. Errors are logged and
+	// the flow falls back to LLM-only behavior.
+	var results []tavilyResult
+	if cfg.TavilyAPIKey != "" {
+		searchCtx, searchCancel := context.WithTimeout(ctx, time.Duration(cfg.TavilyTimeoutSeconds)*time.Second)
+		r, err := searchTavily(searchCtx, cfg, query)
+		searchCancel() // release budget before the LLM call
+		switch {
+		case err == nil:
+			results = r
+		case errors.Is(err, ErrTavilyNotConfigured):
+			b.logger.Debug("tavily not configured, skipping search grounding")
+		default:
+			b.logger.Warn("tavily search failed, falling back to LLM-only",
+				"error", err,
+				"base_url", cfg.TavilyBaseURL)
+		}
+	}
+
 	// Call Nebius Token Factory
-	answer, err := generateWithTokenFactory(ctx, cfg, query)
+	messages := buildMessages(query, cfg.TofaSystemPrompt, results)
+	answer, err := generateWithTokenFactory(ctx, cfg, messages)
 	if err != nil {
 		if errors.Is(err, ErrLLMNotConfigured) {
 			s.ChannelMessageSendReply(m.ChannelID, "Я не настроен для этого, извини!", m.Reference())
@@ -155,5 +196,6 @@ func (b *Bot) ask(ctx context.Context, s *discordgo.Session, m *discordgo.Messag
 		return
 	}
 
+	b.logger.Info("ask answered", "tavily_results", len(results))
 	s.ChannelMessageSendReply(m.ChannelID, answer, m.Reference())
 }

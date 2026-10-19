@@ -33,6 +33,22 @@ type Config struct {
 	TofaTemperature     float32 `yaml:"-"` // TOFA_TEMPERATURE
 	TofaTopP            float32 `yaml:"-"` // TOFA_TOP_P
 	TofaMaxOutputTokens int32   `yaml:"-"` // TOFA_MAX_OUTPUT_TOKENS
+
+	// Tavily Search configuration (optional, from Doppler). Used to ground
+	// LLM answers with web search results. Missing API key silently
+	// disables the feature.
+	TavilyAPIKey         string `yaml:"-"` // TAVILY_API_KEY (secret, never logged)
+	TavilyBaseURL        string `yaml:"-"` // TAVILY_BASE_URL
+	TavilySearchDepth    string `yaml:"-"` // TAVILY_SEARCH_DEPTH
+	TavilyTopic          string `yaml:"-"` // TAVILY_TOPIC
+	TavilyMaxResults     int    `yaml:"-"` // TAVILY_MAX_RESULTS
+	TavilyTimeoutSeconds int    `yaml:"-"` // TAVILY_TIMEOUT_SECONDS
+	TavilyIncludeDomains string `yaml:"-"` // TAVILY_INCLUDE_DOMAINS (CSV)
+	TavilyExcludeDomains string `yaml:"-"` // TAVILY_EXCLUDE_DOMAINS (CSV)
+
+	// Outer ask budget. Covers the optional Tavily search step and the
+	// LLM call together. Default 15s matches the historical hardcoded value.
+	AskTimeoutSeconds int `yaml:"-"` // ASK_TIMEOUT_SECONDS
 }
 
 func (cfg Config) IsValid() error {
@@ -94,6 +110,15 @@ func (cfg Config) LogValue() slog.Value {
 		slog.Float64("tofa_temperature", float64(cfg.TofaTemperature)),
 		slog.Float64("tofa_top_p", float64(cfg.TofaTopP)),
 		slog.Int("tofa_max_output_tokens", int(cfg.TofaMaxOutputTokens)),
+		slog.String("tavily_api_key", "***REDACTED***"),
+		slog.String("tavily_base_url", cfg.TavilyBaseURL),
+		slog.String("tavily_search_depth", cfg.TavilySearchDepth),
+		slog.String("tavily_topic", cfg.TavilyTopic),
+		slog.Int("tavily_max_results", cfg.TavilyMaxResults),
+		slog.Int("tavily_timeout_seconds", cfg.TavilyTimeoutSeconds),
+		slog.String("tavily_include_domains", cfg.TavilyIncludeDomains),
+		slog.String("tavily_exclude_domains", cfg.TavilyExcludeDomains),
+		slog.Int("ask_timeout_seconds", cfg.AskTimeoutSeconds),
 	)
 }
 
@@ -260,6 +285,65 @@ func (cm *ConfigManager) Reload(ctx context.Context) error {
 		mt, err := strconv.Atoi(*maxTokensSecret.Computed)
 		if err == nil {
 			newConfig.TofaMaxOutputTokens = int32(mt)
+		}
+	}
+
+	// Parse Tavily Search configuration (optional). All fields have
+	// reasonable defaults; only TAVILY_API_KEY activates the feature.
+	if tavilyAPIKeySecret, ok := secrets["TAVILY_API_KEY"]; ok && tavilyAPIKeySecret.Computed != nil {
+		newConfig.TavilyAPIKey = *tavilyAPIKeySecret.Computed
+	}
+
+	if tavilyBaseURLSecret, ok := secrets["TAVILY_BASE_URL"]; ok && tavilyBaseURLSecret.Computed != nil {
+		newConfig.TavilyBaseURL = *tavilyBaseURLSecret.Computed
+	}
+	if newConfig.TavilyBaseURL == "" {
+		newConfig.TavilyBaseURL = "https://api.tavily.com"
+	}
+
+	if tavilySearchDepthSecret, ok := secrets["TAVILY_SEARCH_DEPTH"]; ok && tavilySearchDepthSecret.Computed != nil {
+		newConfig.TavilySearchDepth = *tavilySearchDepthSecret.Computed
+	}
+	if newConfig.TavilySearchDepth == "" {
+		newConfig.TavilySearchDepth = "basic"
+	}
+
+	if tavilyTopicSecret, ok := secrets["TAVILY_TOPIC"]; ok && tavilyTopicSecret.Computed != nil {
+		newConfig.TavilyTopic = *tavilyTopicSecret.Computed
+	}
+	if newConfig.TavilyTopic == "" {
+		newConfig.TavilyTopic = "general"
+	}
+
+	newConfig.TavilyMaxResults = 3
+	if tavilyMaxResultsSecret, ok := secrets["TAVILY_MAX_RESULTS"]; ok && tavilyMaxResultsSecret.Computed != nil {
+		mr, err := strconv.Atoi(*tavilyMaxResultsSecret.Computed)
+		if err == nil {
+			newConfig.TavilyMaxResults = mr
+		}
+	}
+
+	newConfig.TavilyTimeoutSeconds = 5
+	if tavilyTimeoutSecret, ok := secrets["TAVILY_TIMEOUT_SECONDS"]; ok && tavilyTimeoutSecret.Computed != nil {
+		ts, err := strconv.Atoi(*tavilyTimeoutSecret.Computed)
+		if err == nil {
+			newConfig.TavilyTimeoutSeconds = ts
+		}
+	}
+
+	if tavilyIncludeSecret, ok := secrets["TAVILY_INCLUDE_DOMAINS"]; ok && tavilyIncludeSecret.Computed != nil {
+		newConfig.TavilyIncludeDomains = *tavilyIncludeSecret.Computed
+	}
+	if tavilyExcludeSecret, ok := secrets["TAVILY_EXCLUDE_DOMAINS"]; ok && tavilyExcludeSecret.Computed != nil {
+		newConfig.TavilyExcludeDomains = *tavilyExcludeSecret.Computed
+	}
+
+	// Parse outer ask budget (covers search + LLM together).
+	newConfig.AskTimeoutSeconds = 15
+	if askTimeoutSecret, ok := secrets["ASK_TIMEOUT_SECONDS"]; ok && askTimeoutSecret.Computed != nil {
+		at, err := strconv.Atoi(*askTimeoutSecret.Computed)
+		if err == nil && at > 0 {
+			newConfig.AskTimeoutSeconds = at
 		}
 	}
 
